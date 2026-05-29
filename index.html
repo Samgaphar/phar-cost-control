@@ -983,6 +983,213 @@
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
   .status-meta { opacity: 0.7; }
 
+  /* ===== INVENTORY MULTI-POS ===== */
+  .inv-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .inv-filters { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .inv-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: 20px;
+    background: var(--white);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gray-700);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .inv-filter-chip:hover { border-color: var(--phar-navy); color: var(--phar-navy); }
+  .inv-filter-chip.active {
+    background: var(--phar-navy);
+    color: var(--white);
+    border-color: var(--phar-navy);
+  }
+
+  .inv-table-wrap {
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--white);
+  }
+  .inv-table-scroll {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  table.inv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 1200px;
+  }
+  table.inv-table thead th {
+    background: var(--phar-navy);
+    color: var(--white);
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  table.inv-table thead th.pos-col {
+    background: var(--phar-navy-dark);
+    text-align: right;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    min-width: 70px;
+  }
+  table.inv-table thead th.total-col {
+    background: var(--phar-navy-light);
+    text-align: right;
+  }
+  table.inv-table tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--gray-100);
+    vertical-align: middle;
+  }
+  table.inv-table tbody tr:hover { background: var(--gray-50); }
+  table.inv-table tbody td.pos-cell {
+    background: var(--phar-navy-faint);
+    padding: 4px 6px;
+    text-align: right;
+  }
+  table.inv-table tbody td.pos-cell input {
+    border: none;
+    background: transparent;
+    text-align: right;
+    padding: 6px 8px;
+    width: 100%;
+    font-weight: 600;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  table.inv-table tbody td.pos-cell input:focus {
+    background: var(--white);
+    border: 1px solid var(--phar-navy);
+    border-radius: 2px;
+    box-shadow: none;
+  }
+  table.inv-table tbody td.pos-cell input:hover {
+    background: var(--white);
+  }
+  table.inv-table tbody td.total-cell {
+    background: var(--phar-navy-pale);
+    text-align: right;
+    font-family: 'Archivo', sans-serif;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--phar-navy);
+  }
+  table.inv-table tbody td.value-cell {
+    text-align: right;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--gray-900);
+  }
+  table.inv-table tbody td.delta-cell {
+    text-align: right;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+  }
+  .delta-positive { color: var(--success); }
+  .delta-negative { color: var(--danger); }
+  .delta-warning { color: var(--warning); }
+  .delta-neutral { color: var(--gray-400); }
+
+  .inv-article-cell {
+    font-weight: 600;
+    color: var(--gray-900);
+    max-width: 220px;
+  }
+  .inv-article-meta {
+    font-size: 10px;
+    color: var(--gray-500);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    margin-top: 2px;
+  }
+  .inv-cat-cell {
+    font-size: 10px;
+    color: var(--gray-500);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .inv-pu-cell {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--gray-700);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  /* POS legend bar */
+  .pos-legend {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 11px;
+  }
+  .pos-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--gray-700);
+    font-weight: 600;
+  }
+  .pos-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--phar-navy);
+  }
+
+  .mercuriale-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--gray-700);
+    transition: all 0.15s;
+  }
+  .mercuriale-tab:hover { border-color: var(--phar-navy); color: var(--phar-navy); }
+  .mercuriale-tab.active {
+    background: var(--phar-navy);
+    color: var(--white);
+    border-color: var(--phar-navy);
+  }
+  .mercuriale-tab-icon {
+    width: 8px;
+    height: 8px;
+    background: currentColor;
+    border-radius: 50%;
+  }
+  .mercuriale-tabs { display: flex; gap: 8px; }
+
   /* ===== UTILS ===== */
   .row { display: flex; align-items: center; gap: 12px; }
   .row-between { display: flex; justify-content: space-between; align-items: center; }
@@ -1335,35 +1542,52 @@
           <div class="module-title-wrap">
             <div class="module-kicker">03 · Cost Control</div>
             <h1 class="module-title">Inventaire</h1>
-            <p class="module-subtitle">Valorisation des stocks au CUMP et analyse des écarts théorique vs physique par point de vente.</p>
+            <p class="module-subtitle">Mercuriale multi-points de vente · saisie simultanée des stocks physiques par emplacement, valorisation automatique au prix unitaire et comparaison avec le mois précédent.</p>
           </div>
         </div>
         <div class="module-actions">
           <button class="btn btn-outline btn-sm">Historique</button>
+          <button class="btn btn-outline btn-sm" onclick="importMercurialeExcel()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Importer Excel
+          </button>
           <button class="btn btn-primary btn-sm">+ Nouvel inventaire</button>
         </div>
       </div>
 
+      <!-- Mercuriale selector + meta -->
       <div class="card">
         <div class="card-body">
-          <div class="row-between">
+          <div class="row-between" style="flex-wrap: wrap; gap: 16px;">
             <div class="row">
               <div>
-                <label class="field-label">Point de vente</label>
-                <select style="min-width: 220px;">
-                  <option>Cuisine principale</option>
-                  <option>Bar lobby</option>
-                  <option>Buvette piscine</option>
-                  <option>Cave à vins</option>
+                <label class="field-label">Mercuriale</label>
+                <div class="mercuriale-tabs">
+                  <button class="mercuriale-tab active" data-mercuriale="food" onclick="switchMercuriale('food')">
+                    <span class="mercuriale-tab-icon"></span>
+                    Food
+                  </button>
+                  <button class="mercuriale-tab" data-mercuriale="bev" onclick="switchMercuriale('bev')">
+                    <span class="mercuriale-tab-icon"></span>
+                    Boissons
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label class="field-label">Période</label>
+                <select style="width: 180px;">
+                  <option>Avril 2026</option>
+                  <option>Mars 2026</option>
+                  <option>Février 2026</option>
                 </select>
               </div>
               <div>
-                <label class="field-label">Date</label>
-                <input type="text" value="29.05.2026" style="width: 160px;">
+                <label class="field-label">Date inventaire</label>
+                <input type="text" value="30.04.2026" style="width: 140px;">
               </div>
               <div>
                 <label class="field-label">Responsable</label>
-                <input type="text" value="M. Roduit" style="width: 180px;">
+                <input type="text" value="M. Roduit" style="width: 160px;">
               </div>
             </div>
             <div class="segment">
@@ -1374,40 +1598,50 @@
         </div>
       </div>
 
-      <div class="kpi-grid">
-        <div class="kpi"><div class="kpi-corner"></div><div class="kpi-label">Articles à compter</div><div class="kpi-value">142</div><div class="kpi-foot">87 saisis · 55 restants</div></div>
-        <div class="kpi kpi-primary"><div class="kpi-corner"></div><div class="kpi-label">Valeur stock théorique</div><div class="kpi-value">24'780 <small>CHF</small></div><div class="kpi-foot">Au CUMP courant</div></div>
-        <div class="kpi kpi-warning"><div class="kpi-corner"></div><div class="kpi-label">Écart estimé</div><div class="kpi-value">−1'247 <small>CHF</small></div><div class="kpi-foot">−5.0% du théorique</div></div>
-        <div class="kpi kpi-danger"><div class="kpi-corner"></div><div class="kpi-label">Articles en alerte</div><div class="kpi-value">8</div><div class="kpi-foot">Variance &gt; 10%</div></div>
+      <!-- KPI Cards -->
+      <div class="kpi-grid" id="inv-kpi-grid">
+        <!-- Filled by JS -->
       </div>
 
-      <div class="toolbar">
-        <div class="toolbar-left">
-          <div class="toolbar-title">Saisie articles</div>
+      <!-- Filters / Toolbar -->
+      <div class="inv-toolbar">
+        <div class="inv-filters" id="inv-filters">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gray-500);">Filtrer</span>
+          <!-- Filter chips inserted by JS -->
         </div>
-        <div class="toolbar-right">
-          <input type="text" placeholder="Rechercher un article..." style="width: 280px;">
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="inv-search" placeholder="Rechercher un article..." style="width: 280px;" oninput="renderInventoryTable()">
+          <button class="btn btn-outline btn-sm" onclick="exportInventoryExcel()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" transform="rotate(180 12 12)"/></svg>
+            Exporter
+          </button>
         </div>
       </div>
 
-      <div class="card" style="padding: 0;">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Article</th><th>Unité</th>
-              <th class="num">Théorique</th><th class="num">Réel</th>
-              <th class="num">Écart</th><th class="num">Valeur</th>
-              <th>Statut</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td><strong>Filet de bœuf CH</strong></td><td>kg</td><td class="num">12.50</td><td class="num"><input type="number" value="11.20" style="width: 80px; text-align: right;"></td><td class="num" style="color: var(--danger);">−1.30</td><td class="num">−87.10</td><td><span class="badge badge-danger">Écart fort</span></td></tr>
-            <tr><td><strong>Riz Carnaroli</strong></td><td>kg</td><td class="num">8.00</td><td class="num"><input type="number" value="7.85" style="width: 80px; text-align: right;"></td><td class="num" style="color: var(--warning);">−0.15</td><td class="num">−1.20</td><td><span class="badge badge-success">OK</span></td></tr>
-            <tr><td><strong>Vin blanc Chasselas</strong></td><td>btl</td><td class="num">24</td><td class="num"><input type="number" value="22" style="width: 80px; text-align: right;"></td><td class="num" style="color: var(--warning);">−2</td><td class="num">−18.00</td><td><span class="badge badge-warning">À surveiller</span></td></tr>
-            <tr><td><strong>Parmesan AOP 24 mois</strong></td><td>kg</td><td class="num">3.20</td><td class="num"><input type="number" value="3.15" style="width: 80px; text-align: right;"></td><td class="num" style="color: var(--warning);">−0.05</td><td class="num">−2.10</td><td><span class="badge badge-success">OK</span></td></tr>
-            <tr><td><strong>Beurre AOP</strong></td><td>kg</td><td class="num">5.00</td><td class="num"><input type="number" value="4.20" style="width: 80px; text-align: right;"></td><td class="num" style="color: var(--danger);">−0.80</td><td class="num">−11.20</td><td><span class="badge badge-danger">Écart fort</span></td></tr>
-          </tbody>
-        </table>
+      <!-- Inventory table -->
+      <div class="inv-table-wrap">
+        <div class="pos-legend" id="inv-pos-legend">
+          <!-- Filled by JS -->
+        </div>
+        <div class="inv-table-scroll">
+          <table class="inv-table" id="inv-table">
+            <!-- Filled by JS -->
+          </table>
+        </div>
+      </div>
+
+      <div class="row-between mt-md" style="padding-top: 8px;">
+        <div style="font-size: 13px; color: var(--gray-500);">
+          <span id="inv-row-count">—</span> articles affichés · valorisation totale <strong id="inv-total-value" style="color: var(--gray-900); font-family: 'Archivo'; font-size: 15px;">— CHF</strong>
+        </div>
+        <div class="row" style="gap: 8px;">
+          <button class="btn btn-outline btn-sm" onclick="exportInventoryPDF()">Exporter PDF signé</button>
+          <button class="btn btn-outline btn-sm">Valider partiellement</button>
+          <button class="btn btn-primary btn-sm" onclick="validateInventory()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Valider l'inventaire
+          </button>
+        </div>
       </div>
 
     </section>
@@ -1766,6 +2000,332 @@ document.querySelectorAll('.segment').forEach(seg => {
 
 renderIngredients();
 recalc();
+
+/* ============================================================
+   MODULE INVENTAIRE — Mercuriale multi-POS MONA
+   ============================================================ */
+
+// Données mercuriale (échantillon extrait des fichiers MONA Avril 2026)
+const MONA_FOOD = [{"groupe":"Food","categorie":"BH pdj","article":"Jus d'orange frais ELKA 3L","unite":"3LT","fournisseur":"Fideco","pu":11.42,"pos":{"Cuisine":0,"Economat 1":18,"Economat cuisine":0,"BH PDJ":12,"Boulangerie & BOF":0},"mois_m1":101},{"groupe":"Food","categorie":"Maison","article":"Forfait Epices 650CHF","unite":"Pce","fournisseur":"Maison","pu":650,"pos":{"Cuisine":1,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":1},{"groupe":"Food","categorie":"Viande poisson","article":"Poulet Ragout Cuisse","unite":"Kg","fournisseur":"Fideco","pu":18.3,"pos":{"Cuisine":9,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":43.4},{"groupe":"Food","categorie":"Viande poisson","article":"Boeuf Filet KG Prix negocie","unite":"Kg","fournisseur":"Merat","pu":34.9,"pos":{"Cuisine":62,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":133},{"groupe":"Food","categorie":"Fonds, sauces, prod préparés","article":"Sauce Morille","unite":"lt","fournisseur":"Maison","pu":30,"pos":{"Cuisine":10,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":18},{"groupe":"Food","categorie":"Boulangerie & BOF","article":"Trio mini beignets 25gr","unite":"Carton","fournisseur":"Chef gourmet","pu":76.49,"pos":{"Cuisine":3,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":10},{"groupe":"Food","categorie":"Fonds, sauces, prod préparés","article":"Bouillon de Modzetta","unite":"Kg","fournisseur":"Maison","pu":8,"pos":{"Cuisine":60,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":60},{"groupe":"Food","categorie":"Viande poisson","article":"Veau Faux-Filet KG","unite":"Kg","fournisseur":"Fideco","pu":43.1,"pos":{"Cuisine":5,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":11},{"groupe":"Food","categorie":"Fonds, sauces, prod préparés","article":"Wrap","unite":"Kg","fournisseur":"Stettler","pu":7,"pos":{"Cuisine":4,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":65},{"groupe":"Food","categorie":"Pâtisserie","article":"Œuf Chocolat Ganache 2kg","unite":"CAR","fournisseur":"Caromela","pu":108.69,"pos":{"Cuisine":0,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":3.9},{"groupe":"Food","categorie":"Fonds, sauces, prod préparés","article":"Pasta maison","unite":"Kg","fournisseur":"Maison","pu":9,"pos":{"Cuisine":10,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":50},{"groupe":"Café & Thé","categorie":"BH pdj","article":"Nescafe Smooth & Crema 12x500g","unite":"500gr","fournisseur":"Nestlé","pu":29.9,"pos":{"Cuisine":0,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":12},{"groupe":"Food","categorie":"Viande poisson","article":"Saumon fumé Ecosse prétranché","unite":"Kg","fournisseur":"Fideco","pu":37.34,"pos":{"Cuisine":0,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":7.55},{"groupe":"Café & Thé","categorie":"BH pdj","article":"Nespresso capsules Lungo Decafeinato 50pces","unite":"box","fournisseur":"Presto café","pu":22.5,"pos":{"Cuisine":0,"Economat 1":17,"Economat cuisine":0,"BH PDJ":2,"Boulangerie & BOF":0},"mois_m1":31},{"groupe":"Food","categorie":"Economat cuisine","article":"Sakura 0.5L","unite":"Bte","fournisseur":"Fideco/Koronekes","pu":44.3,"pos":{"Cuisine":2.5,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":3},{"groupe":"Food","categorie":"Boulangerie & BOF","article":"Madeleine 45GX70pce","unite":"Carton","fournisseur":"Chef gourmet","pu":50.58,"pos":{"Cuisine":4,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":9},{"groupe":"Food","categorie":"Boulangerie & BOF","article":"Fromage PDJ Maréchal KG","unite":"Kg","fournisseur":"Petit Crémier","pu":17.95,"pos":{"Cuisine":8,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":22},{"groupe":"Food","categorie":"Pâtisserie","article":"Œuf Chocolat Praline 2kg","unite":"CAR","fournisseur":"Caromela","pu":65.63,"pos":{"Cuisine":0,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":3.6},{"groupe":"Food","categorie":"Economat cuisine","article":"Huile d'Olive cuisson L","unite":"lt","fournisseur":"Saviva","pu":10.99,"pos":{"Cuisine":0,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":20},{"groupe":"Food","categorie":"Boulangerie & BOF","article":"Pain au maïs 300g","unite":"Carton","fournisseur":"Chef gourmet","pu":50.24,"pos":{"Cuisine":0,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":4},{"groupe":"Food","categorie":"Economat cuisine","article":"Bouillon Corsé Volaille Salsus","unite":"L","fournisseur":"Caromela","pu":16.44,"pos":{"Cuisine":0,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":12},{"groupe":"Food","categorie":"Cuisine / Economat 2","article":"Huile Carlo Crisci 5L","unite":"Bidon","fournisseur":"Carlo Crisci","pu":85,"pos":{"Cuisine":0,"Economat 1":28,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":30},{"groupe":"Food","categorie":"BH pdj","article":"Beurre salé portion 10gr x 100","unite":"carton","fournisseur":"Stettler","pu":28,"pos":{"Cuisine":4,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":10},{"groupe":"Food","categorie":"Fruits, légumes","article":"Champignon Mélange 5-7 sortes 2kg","unite":"Kg","fournisseur":"Culture","pu":13.75,"pos":{"Cuisine":0,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":12},{"groupe":"Café & Thé","categorie":"Safran / Economat 2","article":"Thé Jasmin Dammann pearl","unite":"paq 500gr","fournisseur":"Bevanar","pu":81.7,"pos":{"Cuisine":0,"Economat 1":2,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":4},{"groupe":"Food","categorie":"Pâtisserie","article":"Beurre de Cacao Seau 3kg","unite":"Kg","fournisseur":"Caromela","pu":31.73,"pos":{"Cuisine":0,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":4.25},{"groupe":"Food","categorie":"Pâtisserie","article":"Chocolat 40% Jivara Valrhona 3Kg","unite":"Kg","fournisseur":"Caromela","pu":23.79,"pos":{"Cuisine":3.3,"Economat 1":0,"Economat cuisine":0,"BH PDJ":0,"Boulangerie & BOF":0},"mois_m1":8.5}];
+
+const MONA_BEV = [{"groupe":"Bières","article":"Bière Kitchen Brew Centenniale IPA","mill":"","unite":"33cl","fournisseur":"Amstein","pu":2.66,"pos":{"Cave Min. & Bières":32,"Cave vins & spirit":0,"Safran min.":7,"Safran cave vin":0,"Living":9,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Bières","article":"Bière l'Hermine","mill":"","unite":"33cl","fournisseur":"Brasserie Mine Bex","pu":2.8,"pos":{"Cave Min. & Bières":17,"Cave vins & spirit":0,"Safran min.":12,"Safran cave vin":0,"Living":4,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Bières","article":"Bière Nebuleuse Diversion","mill":"","unite":"33cl","fournisseur":"Amstein","pu":2.44,"pos":{"Cave Min. & Bières":48,"Cave vins & spirit":0,"Safran min.":8,"Safran cave vin":0,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Bières","article":"Bière S/Alcool Heineken 33cl","mill":"","unite":"33cl","fournisseur":"Amstein","pu":1.65,"pos":{"Cave Min. & Bières":42,"Cave vins & spirit":0,"Safran min.":11,"Safran cave vin":0,"Living":13,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Café & Thé","article":"Café en grains Italiano 1Kg","mill":"","unite":"Kg","fournisseur":"Cuendet","pu":20.7,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":0,"Safran min.":0,"Safran cave vin":0,"Living":0,"Purple":1,"Tubbo":0,"Bout.":0}},{"groupe":"Vin","article":"Champagne Beatrice Baron 75cl FR","mill":"","unite":"75cl","fournisseur":"MonDrink","pu":14.9,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":21,"Safran min.":0,"Safran cave vin":0,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Vin","article":"Chasselas Romand Obrist Fendant Blanc 1L","mill":"","unite":"1lt","fournisseur":"Obrist","pu":5.43,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":42,"Safran min.":0,"Safran cave vin":0,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"spirit","article":"Armagnac Marquisat","mill":"","unite":"70cl","fournisseur":"MonDrink","pu":32,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":0.7,"Safran min.":0.5,"Safran cave vin":0,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"spirit","article":"Brandy Baronet","mill":"Litre","unite":"100cl","fournisseur":"MonDrink","pu":19.35,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":1,"Safran min.":0,"Safran cave vin":0,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Minérales","article":"Bitter Crodino Jaune s/alcool","mill":"","unite":"17cl","fournisseur":"MonDrink","pu":0.83,"pos":{"Cave Min. & Bières":29,"Cave vins & spirit":0,"Safran min.":0,"Safran cave vin":0,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Minérales","article":"Bitter Crodino Rouge s/alcool","mill":"","unite":"17cl","fournisseur":"Amstein","pu":1.93,"pos":{"Cave Min. & Bières":72,"Cave vins & spirit":0,"Safran min.":12,"Safran cave vin":0,"Living":1,"Purple":4,"Tubbo":0,"Bout.":0}},{"groupe":"Minérales","article":"Coca Cola Zero 1.5L PET","mill":"","unite":"150cl","fournisseur":"Amstein","pu":2.2,"pos":{"Cave Min. & Bières":22,"Cave vins & spirit":0,"Safran min.":0,"Safran cave vin":0,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Minérales","article":"Coca Cola Zero 33cl","mill":"","unite":"33cl","fournisseur":"Amstein","pu":1.07,"pos":{"Cave Min. & Bières":123,"Cave vins & spirit":0,"Safran min.":23,"Safran cave vin":0,"Living":3,"Purple":12,"Tubbo":0,"Bout.":0}},{"groupe":"spirit","article":"Amaretto Disaronno","mill":"","unite":"70cl","fournisseur":"MonDrink","pu":21.18,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":4,"Safran min.":0,"Safran cave vin":0,"Living":0.8,"Purple":0.3,"Tubbo":0,"Bout.":0}},{"groupe":"spirit","article":"Amaretto Lorenzo Inga","mill":"","unite":"70cl","fournisseur":"Swiss Wine Distri.","pu":32,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":2,"Safran min.":0.4,"Safran cave vin":1,"Living":2.2,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"spirit","article":"Aperol 100cl","mill":"","unite":"100cl","fournisseur":"MonDrink","pu":18.04,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":14,"Safran min.":0.5,"Safran cave vin":1,"Living":1,"Purple":6,"Tubbo":0,"Bout.":0}},{"groupe":"spirit","article":"Campari 100cl","mill":"","unite":"100cl","fournisseur":"MonDrink","pu":23.96,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":2,"Safran min.":0.5,"Safran cave vin":2,"Living":1.4,"Purple":2.6,"Tubbo":0,"Bout.":0}},{"groupe":"Vin","article":"Aigle les Murailles BLC 35cl","mill":"2024","unite":"35cl","fournisseur":"Obrist","pu":9.02,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":24,"Safran min.":6,"Safran cave vin":10,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Vin","article":"Blanc de Merlot Empreinte La Côte 75cl","mill":"2025","unite":"75cl","fournisseur":"Cave de la Côte","pu":12.8,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":36,"Safran min.":0,"Safran cave vin":0,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Vin","article":"Calamin Grand Cru AOC Chasselas","mill":"2025","unite":"75cl","fournisseur":"Enchères Tschopp","pu":12,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":2,"Safran min.":12,"Safran cave vin":0,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}},{"groupe":"Vin","article":"Chardonne Noble Terre 50cl","mill":"","unite":"50cl","fournisseur":"Cave Vevey MTX","pu":8,"pos":{"Cave Min. & Bières":0,"Cave vins & spirit":48,"Safran min.":8,"Safran cave vin":14,"Living":0,"Purple":0,"Tubbo":0,"Bout.":0}}];
+
+// Définition des points de vente par mercuriale
+const POS_DEFINITIONS = {
+  food: ['Cuisine', 'Economat 1', 'Economat cuisine', 'BH PDJ', 'Boulangerie & BOF'],
+  bev: ['Cave Min. & Bières', 'Cave vins & spirit', 'Safran min.', 'Safran cave vin', 'Living', 'Purple', 'Tubbo', 'Bout.']
+};
+
+// Couleurs POS pour la légende (alternance subtile)
+const POS_COLORS = ['#263B8B', '#3A4FA8', '#2D7A4F', '#C68A1A', '#6B5BCC', '#B23B2A', '#0A8B8B', '#7A3B8B'];
+
+let currentMercuriale = 'food';
+let inventoryData = JSON.parse(JSON.stringify(MONA_FOOD)); // copie pour édition
+let activeCategoryFilter = 'all';
+
+function switchMercuriale(type) {
+  currentMercuriale = type;
+  inventoryData = JSON.parse(JSON.stringify(type === 'food' ? MONA_FOOD : MONA_BEV));
+  activeCategoryFilter = 'all';
+
+  document.querySelectorAll('.mercuriale-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.mercuriale === type);
+  });
+
+  renderInventoryFilters();
+  renderInventoryPosLegend();
+  renderInventoryTable();
+  renderInventoryKPIs();
+}
+
+function getInventoryCategories() {
+  // Pour Food on filtre par catégorie, pour Bev par groupe
+  const field = currentMercuriale === 'food' ? 'categorie' : 'groupe';
+  const set = new Set(inventoryData.map(i => i[field]).filter(Boolean));
+  return Array.from(set).sort();
+}
+
+function renderInventoryFilters() {
+  const wrap = document.getElementById('inv-filters');
+  const categories = getInventoryCategories();
+  const fieldLabel = currentMercuriale === 'food' ? 'Catégorie' : 'Groupe';
+
+  let html = `<span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gray-500);">${fieldLabel}</span>`;
+  html += `<button class="inv-filter-chip ${activeCategoryFilter === 'all' ? 'active' : ''}" onclick="setCategoryFilter('all')">Tout (${inventoryData.length})</button>`;
+  categories.forEach(cat => {
+    const count = inventoryData.filter(i => (currentMercuriale === 'food' ? i.categorie : i.groupe) === cat).length;
+    html += `<button class="inv-filter-chip ${activeCategoryFilter === cat ? 'active' : ''}" onclick="setCategoryFilter('${cat.replace(/'/g, "\\'")}')">${cat} <span style="opacity:0.6;">${count}</span></button>`;
+  });
+  wrap.innerHTML = html;
+}
+
+function setCategoryFilter(cat) {
+  activeCategoryFilter = cat;
+  renderInventoryFilters();
+  renderInventoryTable();
+}
+
+function renderInventoryPosLegend() {
+  const wrap = document.getElementById('inv-pos-legend');
+  const posList = POS_DEFINITIONS[currentMercuriale];
+  wrap.innerHTML = `
+    <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-500); margin-right: 8px;">Points de vente</span>
+    ${posList.map((p, i) => `
+      <span class="pos-legend-item">
+        <span class="pos-legend-dot" style="background: ${POS_COLORS[i % POS_COLORS.length]};"></span>
+        ${p}
+      </span>
+    `).join('')}
+  `;
+}
+
+function getFilteredInventory() {
+  const search = document.getElementById('inv-search')?.value.toLowerCase() || '';
+  return inventoryData.filter(item => {
+    if (activeCategoryFilter !== 'all') {
+      const field = currentMercuriale === 'food' ? item.categorie : item.groupe;
+      if (field !== activeCategoryFilter) return false;
+    }
+    if (search) {
+      const hay = (item.article + ' ' + (item.fournisseur || '') + ' ' + (item.categorie || '') + ' ' + item.groupe).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function computeItemTotal(item) {
+  return Object.values(item.pos).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+}
+
+function renderInventoryTable() {
+  const table = document.getElementById('inv-table');
+  const filtered = getFilteredInventory();
+  const posList = POS_DEFINITIONS[currentMercuriale];
+  const showM1 = currentMercuriale === 'food';
+
+  let headHtml = `<thead><tr>
+    <th style="min-width: 220px;">Article</th>
+    <th>Unité</th>
+    <th>Fournisseur</th>
+    <th class="pos-col" style="text-align: right;">P.U.</th>`;
+  posList.forEach((pos, i) => {
+    headHtml += `<th class="pos-col" title="${pos}">${pos}</th>`;
+  });
+  headHtml += `<th class="total-col">Total</th>
+    <th class="total-col">Valeur CHF</th>`;
+  if (showM1) headHtml += `<th class="total-col">M-1</th><th class="total-col">Δ</th>`;
+  headHtml += `</tr></thead>`;
+
+  let bodyHtml = '<tbody>';
+  let totalValue = 0;
+  filtered.forEach((item, idx) => {
+    const total = computeItemTotal(item);
+    const value = total * item.pu;
+    totalValue += value;
+    const m1 = item.mois_m1 || 0;
+    const delta = total - m1;
+    const deltaPct = m1 > 0 ? (delta / m1) * 100 : 0;
+
+    let deltaClass = 'delta-neutral';
+    if (showM1 && m1 > 0) {
+      if (Math.abs(deltaPct) < 10) deltaClass = 'delta-neutral';
+      else if (deltaPct < -25) deltaClass = 'delta-negative';
+      else if (deltaPct > 25) deltaClass = 'delta-warning';
+      else deltaClass = 'delta-positive';
+    }
+
+    const articleMetaParts = [];
+    if (currentMercuriale === 'food' && item.categorie) articleMetaParts.push(item.categorie);
+    if (currentMercuriale === 'bev' && item.groupe) articleMetaParts.push(item.groupe);
+    if (currentMercuriale === 'bev' && item.mill) articleMetaParts.push(`Mill. ${item.mill}`);
+
+    bodyHtml += `<tr data-idx="${idx}">
+      <td class="inv-article-cell">
+        ${item.article}
+        ${articleMetaParts.length ? `<div class="inv-article-meta">${articleMetaParts.join(' · ')}</div>` : ''}
+      </td>
+      <td><span class="inv-cat-cell">${item.unite || '—'}</span></td>
+      <td style="font-size: 11px; color: var(--gray-500);">${item.fournisseur || '—'}</td>
+      <td class="inv-pu-cell">${item.pu.toFixed(2)}</td>`;
+
+    posList.forEach((pos, i) => {
+      const val = item.pos[pos] || 0;
+      bodyHtml += `<td class="pos-cell">
+        <input type="number" value="${val || ''}" step="0.01" min="0"
+               placeholder="0"
+               onchange="updateInventoryQty(${idx}, '${pos.replace(/'/g, "\\'")}', parseFloat(this.value) || 0)">
+      </td>`;
+    });
+
+    bodyHtml += `<td class="total-cell">${total.toFixed(2)}</td>
+      <td class="value-cell">${value.toFixed(2)}</td>`;
+    if (showM1) {
+      bodyHtml += `<td class="delta-cell" style="color: var(--gray-500);">${m1.toFixed(2)}</td>`;
+      if (m1 > 0) {
+        const sign = delta >= 0 ? '+' : '';
+        bodyHtml += `<td class="delta-cell ${deltaClass}">${sign}${delta.toFixed(1)} <span style="opacity:0.7; font-size:10px;">(${sign}${deltaPct.toFixed(0)}%)</span></td>`;
+      } else {
+        bodyHtml += `<td class="delta-cell delta-neutral">—</td>`;
+      }
+    }
+    bodyHtml += `</tr>`;
+  });
+  bodyHtml += '</tbody>';
+
+  table.innerHTML = headHtml + bodyHtml;
+
+  // Stats footer
+  document.getElementById('inv-row-count').textContent = filtered.length;
+  document.getElementById('inv-total-value').textContent = totalValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "'") + ' CHF';
+}
+
+function updateInventoryQty(originalIdx, pos, value) {
+  // Find item by referencing currently filtered set
+  const filtered = getFilteredInventory();
+  const realItem = filtered[originalIdx];
+  if (!realItem) return;
+  // Match item in main inventoryData
+  const mainIdx = inventoryData.findIndex(i => i.article === realItem.article && i.pu === realItem.pu);
+  if (mainIdx >= 0) {
+    inventoryData[mainIdx].pos[pos] = value;
+  }
+  renderInventoryTable();
+  renderInventoryKPIs();
+}
+
+function renderInventoryKPIs() {
+  const grid = document.getElementById('inv-kpi-grid');
+  const totalArticles = inventoryData.length;
+  const totalValue = inventoryData.reduce((s, i) => s + (computeItemTotal(i) * i.pu), 0);
+  const itemsWithStock = inventoryData.filter(i => computeItemTotal(i) > 0).length;
+  const itemsAtZero = totalArticles - itemsWithStock;
+
+  // Calcul écart M-1 (food uniquement)
+  let m1Value = 0;
+  let m1Delta = 0;
+  if (currentMercuriale === 'food') {
+    m1Value = inventoryData.reduce((s, i) => s + ((i.mois_m1 || 0) * i.pu), 0);
+    m1Delta = totalValue - m1Value;
+  }
+
+  // Variance significative (items avec delta > 25% vs M-1)
+  let highVariance = 0;
+  if (currentMercuriale === 'food') {
+    inventoryData.forEach(i => {
+      const t = computeItemTotal(i);
+      const m1 = i.mois_m1 || 0;
+      if (m1 > 0 && Math.abs((t - m1) / m1) > 0.25) highVariance++;
+    });
+  }
+
+  const formatCHF = (n) => n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+
+  let html = `
+    <div class="kpi">
+      <div class="kpi-corner"></div>
+      <div class="kpi-label">Articles mercuriale</div>
+      <div class="kpi-value">${totalArticles}</div>
+      <div class="kpi-foot">${itemsWithStock} avec stock · ${itemsAtZero} à zéro</div>
+    </div>
+    <div class="kpi kpi-primary">
+      <div class="kpi-corner"></div>
+      <div class="kpi-label">Valeur stock total</div>
+      <div class="kpi-value">${formatCHF(totalValue)} <small>CHF</small></div>
+      <div class="kpi-foot">Tous points de vente confondus</div>
+    </div>`;
+
+  if (currentMercuriale === 'food') {
+    const deltaSign = m1Delta >= 0 ? '+' : '';
+    const deltaCls = Math.abs(m1Delta) < 500 ? '' : (m1Delta < 0 ? 'kpi-warning' : 'kpi-success');
+    html += `
+    <div class="kpi ${deltaCls}">
+      <div class="kpi-corner"></div>
+      <div class="kpi-label">Écart vs M-1</div>
+      <div class="kpi-value">${deltaSign}${formatCHF(m1Delta)} <small>CHF</small></div>
+      <div class="kpi-foot">Mars 2026 : ${formatCHF(m1Value)} CHF</div>
+    </div>
+    <div class="kpi ${highVariance > 0 ? 'kpi-warning' : ''}">
+      <div class="kpi-corner"></div>
+      <div class="kpi-label">Articles à variance forte</div>
+      <div class="kpi-value">${highVariance}</div>
+      <div class="kpi-foot">Δ &gt; 25% vs mois précédent</div>
+    </div>`;
+  } else {
+    const posDistribution = POS_DEFINITIONS.bev.map(p => {
+      return inventoryData.reduce((s, i) => s + ((i.pos[p] || 0) * i.pu), 0);
+    });
+    const topPosIdx = posDistribution.indexOf(Math.max(...posDistribution));
+    const topPos = POS_DEFINITIONS.bev[topPosIdx];
+    const topPosVal = posDistribution[topPosIdx];
+    html += `
+    <div class="kpi">
+      <div class="kpi-corner"></div>
+      <div class="kpi-label">Point de vente principal</div>
+      <div class="kpi-value" style="font-size: 18px;">${topPos}</div>
+      <div class="kpi-foot">${formatCHF(topPosVal)} CHF</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-corner"></div>
+      <div class="kpi-label">Points de vente actifs</div>
+      <div class="kpi-value">${posDistribution.filter(v => v > 0).length} <small>/ 8</small></div>
+      <div class="kpi-foot">Avec stock valorisé</div>
+    </div>`;
+  }
+
+  grid.innerHTML = html;
+}
+
+function importMercurialeExcel() {
+  alert('Pour importer une vraie mercuriale Excel :\n\n• Cliquez sur "Importer Excel"\n• Sélectionnez votre fichier (.xlsx)\n• PHAR Cost détecte automatiquement la structure (colonnes POS, P.U., M-1)\n• Validez le mapping des colonnes\n\nCette fonctionnalité utilise SheetJS qui est déjà chargé dans l\'app.');
+}
+
+function exportInventoryExcel() {
+  // Export the filtered inventory using SheetJS
+  const filtered = getFilteredInventory();
+  const posList = POS_DEFINITIONS[currentMercuriale];
+  const showM1 = currentMercuriale === 'food';
+
+  const header = ['Article', 'Unité', 'Fournisseur', 'P.U.'];
+  posList.forEach(p => header.push(p));
+  header.push('Total', 'Valeur CHF');
+  if (showM1) header.push('M-1', 'Écart');
+
+  const rows = [header];
+  filtered.forEach(item => {
+    const total = computeItemTotal(item);
+    const value = total * item.pu;
+    const row = [item.article, item.unite || '', item.fournisseur || '', item.pu];
+    posList.forEach(p => row.push(item.pos[p] || 0));
+    row.push(total, value);
+    if (showM1) {
+      row.push(item.mois_m1 || 0);
+      row.push(total - (item.mois_m1 || 0));
+    }
+    rows.push(row);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Inventaire ' + (currentMercuriale === 'food' ? 'Food' : 'Boissons'));
+  XLSX.writeFile(wb, `Inventaire_MONA_${currentMercuriale}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function exportInventoryPDF() {
+  alert('Génération du PDF signé — prêt à être branché à jsPDF ou un service serveur.');
+}
+
+function validateInventory() {
+  const filtered = getFilteredInventory();
+  const total = filtered.reduce((s, i) => s + (computeItemTotal(i) * i.pu), 0);
+  if (confirm(`Valider l'inventaire ${currentMercuriale === 'food' ? 'Food' : 'Boissons'} ?\n\n${filtered.length} articles · Valorisation totale : ${total.toFixed(2)} CHF\n\nCette action verrouillera l'inventaire pour archivage et alimentera les calculs de food cost.`)) {
+    alert('✓ Inventaire validé et archivé.\n\nLes valeurs CUMP des articles seront mises à jour automatiquement et propagées au module Recettes.');
+  }
+}
+
+// INIT inventory module
+switchMercuriale('food');
+
 </script>
 
 </body>
