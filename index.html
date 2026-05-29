@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Primeurs · Plateforme Achats</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --ink: #1a1a18;
+    --ink-muted: #6b6b60;
+    --ink-faint: #a8a89a;
+    --paper: #f7f4ed;
+    --paper-warm: #ede9df;
+    --paper-card: #faf8f3;
+    --accent: #2d5a3d;
+    --accent-light: #e8f0ea;
+    --accent-muted: #6a9b78;
+    --gold: #b8861b;
+    --gold-light: #fdf3dc;
+    --danger: #8b2e1e;
+    --danger-light: #faeae7;
+    --radius: 3px;
+    --radius-lg: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  header {
+    border-bottom: 1px solid var(--paper-warm);
+    padding: 0 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    background: var(--paper-card);
+  }
+
+  .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--ink-muted); font-style: italic; font-size: 16px; }
+
+  .badge-version {
+    font-size: 11px;
+    padding: 3px 8px;
+    background: var(--accent-light);
+    color: var(--accent);
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+  }
+
+  main { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .step-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .step-num.done { background: var(--accent); }
+  .step-title { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--ink); }
+
+  .card {
+    background: var(--paper-card);
+    border: 1px solid var(--paper-warm);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    margin-bottom: 24px;
+  }
+
+  .upload-zone {
+    border: 1.5px dashed var(--paper-warm);
+    border-radius: var(--radius-lg);
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--paper);
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent-muted); background: var(--accent-light); }
+  .upload-zone.loaded { border-style: solid; border-color: var(--accent); background: var(--accent-light); }
+
+  .upload-icon { font-size: 32px; margin-bottom: 10px; }
+  .upload-label { font-weight: 500; color: var(--ink); }
+  .upload-sub { font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
+  .upload-filename { font-weight: 500; color: var(--accent); margin-top: 8px; font-size: 15px; }
+
+  #file-input { display: none; }
+
+  .api-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 16px;
+  }
+  input[type="password"], input[type="text"], textarea {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid var(--paper-warm);
+    border-radius: var(--radius);
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    outline: none;
+    transition: border 0.15s;
+  }
+  input:focus, textarea:focus { border-color: var(--accent-muted); }
+  textarea { width: 100%; resize: vertical; min-height: 80px; }
+
+  .api-hint { font-size: 11px; color: var(--ink-muted); margin-top: 6px; }
+  .api-hint a { color: var(--accent); }
+
+  .order-form { margin-top: 16px; }
+  .order-form label { display: block; font-size: 12px; font-weight: 500; color: var(--ink-muted); margin-bottom: 6px; letter-spacing: 0.3px; }
+  .order-items { display: flex; flex-direction: column; gap: 8px; }
+  .order-item-row {
+    display: grid;
+    grid-template-columns: 1fr 80px 1fr 80px;
+    gap: 8px;
+  }
+  .item-remove {
+    background: none; border: none; cursor: pointer;
+    color: var(--ink-faint); font-size: 16px; padding: 4px;
+    transition: color 0.15s;
+    align-self: center;
+  }
+  .item-remove:hover { color: var(--danger); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 18px;
+    border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+    text-decoration: none;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { background: #234a31; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-outline {
+    background: transparent;
+    border-color: var(--paper-warm);
+    color: var(--ink);
+  }
+  .btn-outline:hover { border-color: var(--ink-muted); }
+  .btn-gold {
+    background: var(--gold);
+    color: #fff;
+    border-color: var(--gold);
+  }
+  .btn-gold:hover { background: #9a6f14; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
+
+  .status-log {
+    background: var(--ink);
+    color: #8bc4a0;
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 16px;
+    display: none;
+  }
+  .status-log.visible { display: block; }
+  .log-line { opacity: 0; animation: fadeIn 0.3s forwards; }
+  @keyframes fadeIn { to { opacity: 1; } }
+  .log-ok { color: #8bc4a0; }
+  .log-info { color: #f5c67a; }
+  .log-err { color: #f28b7a; }
+
+  .results-section { display: none; }
+  .results-section.visible { display: block; }
+
+  .comparatif-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 16px;
+  }
+  .comparatif-table th {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .comparatif-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--paper-warm);
+    vertical-align: middle;
+  }
+  .comparatif-table tr:last-child td { border-bottom: none; }
+  .comparatif-table tr:hover td { background: var(--paper-warm); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-cfd { background: #deeaf7; color: #1a4c7a; }
+  .badge-lgf { background: var(--accent-light); color: var(--accent); }
+  .badge-ex { background: var(--gold-light); color: var(--gold); }
+
+  .price-better { color: var(--accent); font-weight: 500; }
+  .price-worse { color: var(--ink-muted); }
+  .price-na { color: var(--ink-faint); font-style: italic; }
+
+  .recap-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .recap-card {
+    background: var(--paper);
+    border: 1px solid var(--paper-warm);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+  }
+  .recap-label { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .recap-value { font-family: 'DM Serif Display', serif; font-size: 26px; color: var(--ink); margin-top: 4px; }
+  .recap-value.accent { color: var(--accent); }
+  .recap-value.gold { color: var(--gold); }
+
+  .sep { border: none; border-top: 1px solid var(--paper-warm); margin: 24px 0; }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .disclaimer {
+    font-size: 11px;
+    color: var(--ink-faint);
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  .week-input { width: 80px; }
+
+  @media (max-width: 600px) {
+    .order-item-row { grid-template-columns: 1fr 70px; }
+    .order-item-row input:nth-child(3),
+    .order-item-row input:nth-child(4) { display: none; }
+    header { padding: 0 16px; }
+    main { padding: 24px 16px 60px; }
+    .recap-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Primeurs <span>· Achats Pro</span></div>
+  <span class="badge-version">v1.0</span>
+</header>
+
+<main>
+
+  <!-- STEP 1 : Fichier comparatif -->
+  <div class="step-header">
+    <div class="step-num" id="step1-num">1</div>
+    <div class="step-title">Importer le comparatif fournisseurs</div>
+  </div>
+  <div class="card">
+    <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="upload-icon">📊</div>
+      <div class="upload-label">Déposer le fichier Excel ici</div>
+      <div class="upload-sub">ou cliquer pour parcourir · .xlsx, .xls acceptés</div>
+      <div class="upload-filename" id="upload-filename" style="display:none;"></div>
+    </div>
+    <input type="file" id="file-input" accept=".xlsx,.xls">
+
+    <div style="margin-top:16px;">
+      <label style="font-size:12px;font-weight:500;color:var(--ink-muted);">Semaine</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <input type="text" id="week-num" class="week-input" placeholder="17" value="17">
+        <span style="font-size:12px;color:var(--ink-muted);">Hôtel / Établissement</span>
+        <input type="text" id="hotel-name" placeholder="W Verbier" style="flex:1;max-width:220px;">
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2 : Liste de commande -->
+  <div class="step-header">
+    <div class="step-num" id="step2-num">2</div>
+    <div class="step-title">Saisir la liste de commande</div>
+  </div>
+  <div class="card">
+    <div class="order-form">
+      <div style="display:grid;grid-template-columns:1fr 80px 1fr 80px 28px;gap:8px;margin-bottom:6px;">
+        <label>Article</label>
+        <label>Quantité</label>
+        <label>Unité</label>
+        <label>Origine souhaitée</label>
+        <span></span>
+      </div>
+      <div class="order-items" id="order-items"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-outline btn-sm" onclick="addItem()">+ Ajouter un article</button>
+      <button class="btn btn-outline btn-sm" onclick="loadExample()">Charger l'exemple S17</button>
+    </div>
+  </div>
+
+  <!-- STEP 3 : Clé API & Analyse -->
+  <div class="step-header">
+    <div class="step-num" id="step3-num">3</div>
+    <div class="step-title">Analyser et générer les bons de commande</div>
+  </div>
+  <div class="card">
+    <div class="api-row">
+      <input type="password" id="api-key" placeholder="Clé API Anthropic  (sk-ant-...)">
+    </div>
+    <p class="api-hint">Votre clé API ne quitte pas votre navigateur · <a href="https://console.anthropic.com" target="_blank">Obtenir une clé →</a></p>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="analyze-btn" onclick="runAnalysis()">
+        Analyser et comparer
+      </button>
+      <span id="analyze-status" style="font-size:12px;color:var(--ink-muted);"></span>
+    </div>
+
+    <div class="status-log" id="status-log"></div>
+  </div>
+
+  <!-- RESULTATS -->
+  <div class="results-section" id="results-section">
+    <hr class="sep">
+
+    <div class="step-header">
+      <div class="step-num done">✓</div>
+      <div class="step-title">Résultats & Export</div>
+    </div>
+
+    <div class="card">
+      <div class="recap-grid" id="recap-grid"></div>
+    </div>
+
+    <div class="card" style="overflow-x:auto;">
+      <div style="font-weight:500;margin-bottom:4px;font-size:13px;">Comparatif article par article</div>
+      <p style="font-size:12px;color:var(--ink-muted);margin-bottom:8px;">Prix net ristourne déduite</p>
+      <table class="comparatif-table" id="comparatif-table"></table>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-gold" onclick="exportExcel()">
+        Exporter bons de commande (.xlsx)
+      </button>
+      <button class="btn btn-outline" onclick="exportJSON()">Exporter JSON</button>
+    </div>
+    <p class="disclaimer">Le fichier Excel contient un onglet par fournisseur + un récapitulatif consolidé.</p>
+  </div>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+let xlsxData = null;
+let analysisResult = null;
+
+const EXAMPLE_ITEMS = [
+  { article: "Basilic", qty: "3", unit: "sachet 100g", origine: "" },
+  { article: "Citron", qty: "20", unit: "kg", origine: "" },
+  { article: "Citrons verts limes", qty: "5", unit: "kg", origine: "" },
+  { article: "Framboises", qty: "3", unit: "kg", origine: "" },
+  { article: "Mangue Avion", qty: "12", unit: "pièce", origine: "" },
+  { article: "Melon Charentais", qty: "6", unit: "pièce", origine: "" },
+  { article: "Oranges à jus", qty: "50", unit: "kg", origine: "" },
+  { article: "Clémentines", qty: "10", unit: "kg", origine: "" },
+];
+
+function addItem(data = {}) {
+  const container = document.getElementById("order-items");
+  const row = document.createElement("div");
+  row.className = "order-item-row";
+  row.style.cssText = "display:grid;grid-template-columns:1fr 80px 1fr 100px 28px;gap:8px;align-items:center;";
+  row.innerHTML = `
+    <input type="text" placeholder="Ex: Basilic" value="${data.article||''}" class="item-article">
+    <input type="text" placeholder="3" value="${data.qty||''}" class="item-qty">
+    <input type="text" placeholder="kg / pièce / sachet" value="${data.unit||''}" class="item-unit">
+    <input type="text" placeholder="Origine (opt.)" value="${data.origine||''}" class="item-origine">
+    <button class="item-remove" onclick="this.closest('.order-item-row').remove()">×</button>
+  `;
+  container.appendChild(row);
+}
+
+function loadExample() {
+  document.getElementById("order-items").innerHTML = "";
+  EXAMPLE_ITEMS.forEach(addItem);
+  document.getElementById("hotel-name").value = "W Verbier";
+  document.getElementById("week-num").value = "17";
+}
+
+function getOrderItems() {
+  return [...document.querySelectorAll(".order-item-row")].map(row => ({
+    article: row.querySelector(".item-article").value.trim(),
+    qty: parseFloat(row.querySelector(".item-qty").value) || 0,
+    unit: row.querySelector(".item-unit").value.trim(),
+    origine: row.querySelector(".item-origine").value.trim(),
+  })).filter(i => i.article);
+}
+
+const dropZone = document.getElementById("drop-zone");
+const fileInput = document.getElementById("file-input");
+
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault(); dropZone.classList.remove("drag");
+  handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", e => handleFile(e.target.files[0]));
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: "binary" });
+      xlsxData = {};
+      wb.SheetNames.forEach(name => {
+        xlsxData[name] = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "" });
+      });
+      dropZone.classList.add("loaded");
+      const fn = document.getElementById("upload-filename");
+      fn.textContent = "✓  " + file.name;
+      fn.style.display = "block";
+      document.getElementById("step1-num").classList.add("done");
+      document.getElementById("step1-num").textContent = "✓";
+      log("✓ Fichier chargé : " + file.name, "ok");
+      log("  Onglets détectés : " + Object.keys(xlsxData).join(", "), "info");
+    } catch(err) {
+      log("✗ Erreur lecture fichier : " + err.message, "err");
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function log(msg, type = "info") {
+  const box = document.getElementById("status-log");
+  box.classList.add("visible");
+  const line = document.createElement("div");
+  line.className = `log-line log-${type}`;
+  line.textContent = msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function runAnalysis() {
+  const apiKey = document.getElementById("api-key").value.trim();
+  if (!apiKey) { log("✗ Clé API manquante", "err"); return; }
+  if (!xlsxData) { log("✗ Aucun fichier Excel chargé", "err"); return; }
+  const items = getOrderItems();
+  if (!items.length) { log("✗ Liste de commande vide", "err"); return; }
+
+  const btn = document.getElementById("analyze-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Analyse en cours...';
+
+  document.getElementById("results-section").classList.remove("visible");
+  document.getElementById("status-log").innerHTML = "";
+
+  log("→ Extraction des données fournisseurs...", "info");
+
+  const sheetText = Object.entries(xlsxData).map(([name, rows]) =>
+    `=== Onglet: ${name} ===\n` + rows.slice(0, 300).map(r => r.join("\t")).join("\n")
+  ).join("\n\n").slice(0, 28000);
+
+  const week = document.getElementById("week-num").value || "?";
+  const hotel = document.getElementById("hotel-name").value || "Établissement";
+
+  const prompt = `Tu es un expert responsable des achats primeurs. Voici les données d'un fichier comparatif fournisseurs au format texte extrait d'un Excel :
+
+${sheetText}
+
+---
+
+Liste de commande pour la semaine ${week} (${hotel}) :
+${items.map(i => `- ${i.article} : ${i.qty} ${i.unit}${i.origine ? ' (origine souhaitée: '+i.origine+')' : ''}`).join('\n')}
+
+---
+
+Pour chaque article de la liste :
+1. Trouve la référence comparable chez CFD (Culture Food SA) ET chez LGF (LéguRiviera).
+2. Utilise les prix AU KG ou à l'unité selon l'article. Indique le prix brut ET net (ristourne déduite).
+3. Désigne le fournisseur le moins cher. Si une origine spécifique est demandée, respecte-la.
+4. Pour les articles vendus par sachet ou pièce (pas en vrac kg), compare le prix par unité commandée.
+
+Réponds UNIQUEMENT avec un JSON valide, sans texte avant ni après, sans balises markdown. Format exact :
+{
+  "semaine": "${week}",
+  "hotel": "${hotel}",
+  "articles": [
+    {
+      "article": "Nom article",
+      "qty": 0,
+      "unit": "unité",
+      "origine_demandee": "",
+      "CFD": {
+        "ref": "",
+        "designation": "",
+        "provenance": "",
+        "conditionnement": "",
+        "prix_brut": 0.0,
+        "prix_net": 0.0,
+        "unite_prix": "kg ou pièce ou sachet",
+        "disponible": true
+      },
+      "LGF": {
+        "ref": "",
+        "designation": "",
+        "provenance": "",
+        "conditionnement": "",
+        "prix_brut": 0.0,
+        "prix_net": 0.0,
+        "unite_prix": "kg ou pièce ou sachet",
+        "disponible": true
+      },
+      "decision": "CFD ou LGF",
+      "raison": "Explication courte"
+    }
+  ]
+}`;
+
+  log("→ Envoi à Claude pour analyse comparative...", "info");
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || "Erreur API " + response.status);
+    }
+
+    const data = await response.json();
+    const raw = data.content.filter(b => b.type === "text").map(b => b.text).join("");
+
+    log("✓ Réponse reçue, parsing JSON...", "ok");
+
+    let parsed;
+    try {
+      const clean = raw.replace(/```json|```/g, "").trim();
+      parsed = JSON.parse(clean);
+    } catch(e) {
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) parsed = JSON.parse(match[0]);
+      else throw new Error("JSON invalide dans la réponse");
+    }
+
+    analysisResult = parsed;
+    log("✓ Analyse terminée — " + parsed.articles.length + " articles traités", "ok");
+    displayResults(parsed);
+
+  } catch(err) {
+    log("✗ Erreur : " + err.message, "err");
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = "Analyser et comparer";
+}
+
+function displayResults(data) {
+  const cfdItems = data.articles.filter(a => a.decision === "CFD");
+  const lgfItems = data.articles.filter(a => a.decision === "LGF");
+
+  const totalCFD = cfdItems.reduce((s, a) => {
+    const d = a.CFD;
+    return s + (a.qty * (d.prix_net || 0));
+  }, 0);
+  const totalLGF = lgfItems.reduce((s, a) => {
+    const d = a.LGF;
+    return s + (a.qty * (d.prix_net || 0));
+  }, 0);
+  const totalGen = totalCFD + totalLGF;
+
+  document.getElementById("recap-grid").innerHTML = `
+    <div class="recap-card">
+      <div class="recap-label">Culture Food SA</div>
+      <div class="recap-value accent">${totalCFD.toFixed(2)} <small style="font-size:14px;">CHF</small></div>
+      <div style="font-size:11px;color:var(--ink-muted);margin-top:4px;">${cfdItems.length} articles</div>
+    </div>
+    <div class="recap-card">
+      <div class="recap-label">LéguRiviera</div>
+      <div class="recap-value accent">${totalLGF.toFixed(2)} <small style="font-size:14px;">CHF</small></div>
+      <div style="font-size:11px;color:var(--ink-muted);margin-top:4px;">${lgfItems.length} articles</div>
+    </div>
+    <div class="recap-card">
+      <div class="recap-label">Total général S${data.semaine}</div>
+      <div class="recap-value gold">${totalGen.toFixed(2)} <small style="font-size:14px;">CHF</small></div>
+      <div style="font-size:11px;color:var(--ink-muted);margin-top:4px;">${data.articles.length} articles</div>
+    </div>
+  `;
+
+  const tbody = data.articles.map(a => {
+    const cfd = a.CFD || {};
+    const lgf = a.LGF || {};
+    const winner = a.decision;
+    const cfdNet = cfd.prix_net || 0;
+    const lgfNet = lgf.prix_net || 0;
+    const totalNet = (winner === "CFD" ? cfdNet : lgfNet) * a.qty;
+
+    const cfdClass = !cfd.disponible ? "price-na" : winner === "CFD" ? "price-better" : "price-worse";
+    const lgfClass = !lgf.disponible ? "price-na" : winner === "LGF" ? "price-better" : "price-worse";
+
+    const cfdStr = cfd.disponible === false ? "n/d" : cfdNet.toFixed(2) + " CHF";
+    const lgfStr = lgf.disponible === false ? "n/d" : lgfNet.toFixed(2) + " CHF";
+
+    return `<tr>
+      <td><strong>${a.article}</strong></td>
+      <td>${a.qty} ${a.unit}</td>
+      <td>
+        <div style="font-size:12px;">${cfd.ref||'—'}</div>
+        <div style="font-size:11px;color:var(--ink-muted);">${cfd.provenance||''}</div>
+      </td>
+      <td class="${cfdClass}">${cfdStr}</td>
+      <td>
+        <div style="font-size:12px;">${lgf.ref||'—'}</div>
+        <div style="font-size:11px;color:var(--ink-muted);">${lgf.provenance||''}</div>
+      </td>
+      <td class="${lgfClass}">${lgfStr}</td>
+      <td><span class="badge badge-${winner.toLowerCase()}">${winner}</span></td>
+      <td style="font-weight:500;">${totalNet.toFixed(2)} CHF</td>
+      <td style="font-size:11px;color:var(--ink-muted);">${a.raison||''}</td>
+    </tr>`;
+  }).join("");
+
+  document.getElementById("comparatif-table").innerHTML = `
+    <thead><tr>
+      <th>Article</th><th>Qté</th>
+      <th>Réf CFD</th><th>Net CFD</th>
+      <th>Réf LGF</th><th>Net LGF</th>
+      <th>Choix</th><th>Total net</th><th>Raison</th>
+    </tr></thead>
+    <tbody>${tbody}</tbody>
+  `;
+
+  document.getElementById("results-section").classList.add("visible");
+  document.getElementById("results-section").scrollIntoView({ behavior: "smooth" });
+}
+
+function exportExcel() {
+  if (!analysisResult) return;
+  const data = analysisResult;
+  const wb = XLSX.utils.book_new();
+  const week = data.semaine || "?";
+  const hotel = data.hotel || "";
+
+  const HEADER_STYLE = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1F4E79" } } };
+
+  function makeSheet(supplier, articles) {
+    const key = supplier === "CFD" ? "CFD" : "LGF";
+    const supName = supplier === "CFD" ? "Culture Food SA" : "LéguRiviera";
+    const rows = [
+      [`BON DE COMMANDE – ${supName.toUpperCase()}`],
+      [`Semaine ${week} · ${hotel}`],
+      [],
+      ["Réf. article", "Désignation", "Provenance", "Conditionnement", "Quantité", "Unité", "Prix brut/unité (CHF)", "Prix net/unité (CHF)", "Total net (CHF)", "Raison du choix"]
+    ];
+    let total = 0;
+    articles.forEach(a => {
+      const d = a[key] || {};
+      const qty = a.qty || 0;
+      const pnet = d.prix_net || 0;
+      const tnet = qty * pnet;
+      total += tnet;
+      rows.push([
+        d.ref || "",
+        d.designation || "",
+        d.provenance || "",
+        d.conditionnement || "",
+        qty,
+        a.unit || "",
+        d.prix_brut || 0,
+        pnet,
+        tnet,
+        a.raison || ""
+      ]);
+    });
+    rows.push([]);
+    rows.push(["", "", "", "", "", "", "", "TOTAL", total, ""]);
+    return XLSX.utils.aoa_to_sheet(rows);
+  }
+
+  const cfdItems = data.articles.filter(a => a.decision === "CFD");
+  const lgfItems = data.articles.filter(a => a.decision === "LGF");
+
+  if (cfdItems.length > 0) {
+    const ws = makeSheet("CFD", cfdItems);
+    ws["!cols"] = [14,30,14,16,8,10,14,14,14,35].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, "Bon commande Culture Food SA");
+  }
+  if (lgfItems.length > 0) {
+    const ws = makeSheet("LGF", lgfItems);
+    ws["!cols"] = [14,30,14,16,8,10,14,14,14,35].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, "Bon commande LéguRiviera");
+  }
+
+  const totalCFD = cfdItems.reduce((s,a) => s + a.qty*(a.CFD?.prix_net||0), 0);
+  const totalLGF = lgfItems.reduce((s,a) => s + a.qty*(a.LGF?.prix_net||0), 0);
+  const recap = [
+    [`RÉCAPITULATIF SEMAINE ${week} – ${hotel}`],
+    [`Consolidation achats primeurs · CFD & LGF`],
+    [],
+    ["Article", "Fournisseur retenu", "Réf.", "Désignation", "Provenance", "Qté", "Unité", "Prix net/unité", "Total net CHF"],
+  ];
+  data.articles.forEach(a => {
+    const key = a.decision;
+    const d = a[key] || {};
+    const tnet = a.qty * (d.prix_net || 0);
+    recap.push([a.article, key === "CFD" ? "Culture Food SA" : "LéguRiviera", d.ref||"", d.designation||"", d.provenance||"", a.qty, a.unit, d.prix_net||0, tnet]);
+  });
+  recap.push([]);
+  if (cfdItems.length) recap.push(["", "Sous-total CFD", "", "", "", "", "", "", totalCFD]);
+  if (lgfItems.length) recap.push(["", "Sous-total LGF", "", "", "", "", "", "", totalLGF]);
+  recap.push(["", "TOTAL GÉNÉRAL", "", "", "", "", "", "", totalCFD + totalLGF]);
+
+  const wsR = XLSX.utils.aoa_to_sheet(recap);
+  wsR["!cols"] = [22,22,14,30,14,8,10,14,14].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, wsR, `Récap Semaine ${week}`);
+
+  XLSX.writeFile(wb, `Bons_commande_S${week}_${hotel.replace(/\s/g,'_')}.xlsx`);
+}
+
+function exportJSON() {
+  if (!analysisResult) return;
+  const blob = new Blob([JSON.stringify(analysisResult, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url;
+  a.download = `analyse_S${analysisResult.semaine || 'XX'}.json`;
+  a.click();
+}
+
+addItem();
+</script>
+</body>
+</html>
