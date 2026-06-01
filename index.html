@@ -1878,6 +1878,10 @@
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
           <input type="text" id="inv-search" placeholder="Rechercher un article..." style="width: 280px;" oninput="renderInventoryTable()">
+          <button class="btn btn-outline btn-sm" onclick="openMovementsModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+            Journal des entrées
+          </button>
           <button class="btn btn-outline btn-sm" onclick="exportInventoryExcel()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" transform="rotate(180 12 12)"/></svg>
             Exporter
@@ -2365,13 +2369,125 @@ const POS_DEFINITIONS = {
 // Couleurs POS pour la légende (alternance subtile)
 const POS_COLORS = ['#263B8B', '#3A4FA8', '#2D7A4F', '#C68A1A', '#6B5BCC', '#B23B2A', '#0A8B8B', '#7A3B8B'];
 
+/* ============================================================
+   COST CONTROL CORE — Stores persistants, CUMP & journal
+   (Feature B — entrées en stock automatiques depuis les BL)
+   ============================================================ */
+
+const LS_KEYS = {
+  stores: 'phar_inventory_stores_v1',
+  movements: 'phar_stock_movements_v1'
+};
+
+// Garantit que chaque article porte les champs de cost control
+function ensureCostFields(item) {
+  if (item.cump === undefined || item.cump === null) item.cump = item.pu;
+  if (item.prix_reference === undefined || item.prix_reference === null) item.prix_reference = item.pu;
+  if (!Array.isArray(item.historique_prix)) item.historique_prix = [];
+  if (item.lightspeed_sku === undefined) item.lightspeed_sku = null; // préparé pour Feature C
+  return item;
+}
+
+// Charge les stores depuis localStorage, sinon initialise depuis les mercuriales MONA
+function loadStores() {
+  let stores = null, movements = [];
+  try {
+    const rawS = localStorage.getItem(LS_KEYS.stores);
+    if (rawS) stores = JSON.parse(rawS);
+    const rawM = localStorage.getItem(LS_KEYS.movements);
+    if (rawM) movements = JSON.parse(rawM);
+  } catch (e) {
+    console.warn('PHAR · lecture localStorage impossible, réinitialisation', e);
+    stores = null; movements = [];
+  }
+  if (!stores || !stores.food || !stores.bev) {
+    stores = {
+      food: JSON.parse(JSON.stringify(MONA_FOOD)),
+      bev: JSON.parse(JSON.stringify(MONA_BEV))
+    };
+  }
+  stores.food.forEach(ensureCostFields);
+  stores.bev.forEach(ensureCostFields);
+  return { stores, movements };
+}
+
+// Persiste les deux mercuriales + le journal des mouvements
+function saveStores() {
+  try {
+    localStorage.setItem(LS_KEYS.stores, JSON.stringify(pharStores));
+    localStorage.setItem(LS_KEYS.movements, JSON.stringify(stockMovements));
+    return true;
+  } catch (e) {
+    console.error('PHAR · échec sauvegarde localStorage', e);
+    alert('⚠ Sauvegarde locale impossible (espace navigateur saturé ou navigation privée).\nVos modifications restent actives pour cette session mais ne seront pas conservées au rechargement.');
+    return false;
+  }
+}
+
+const _loaded = loadStores();
+const pharStores = _loaded.stores;
+let stockMovements = _loaded.movements;
+
 let currentMercuriale = 'food';
-let inventoryData = JSON.parse(JSON.stringify(MONA_FOOD)); // copie pour édition
+let inventoryData = pharStores.food; // référence directe vers le store actif
 let activeCategoryFilter = 'all';
+
+/* ---------- Utilitaires CUMP & rapprochement ---------- */
+
+// CUMP = (stock existant × ancien CUMP + qté reçue × prix BL) / (stock existant + qté reçue)
+function recalcCUMP(stockExistant, ancienCump, qteRecue, prixBL) {
+  const denom = stockExistant + qteRecue;
+  if (denom <= 0) return prixBL;
+  return (stockExistant * ancienCump + qteRecue * prixBL) / denom;
+}
+
+// Normalisation de nom pour rapprochement (minuscules, sans accents ni ponctuation)
+function normalizeName(s) {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// Cherche un article existant dans un store par SKU, puis par nom normalisé
+function matchInventoryItem(store, designation, sku) {
+  const nd = normalizeName(designation);
+  if (sku) {
+    const bySku = store.find(i => i.lightspeed_sku && i.lightspeed_sku === sku);
+    if (bySku) return bySku;
+  }
+  let m = store.find(i => normalizeName(i.article) === nd); // correspondance exacte normalisée
+  if (m) return m;
+  if (nd.length >= 4) { // tolérance par inclusion
+    m = store.find(i => {
+      const ni = normalizeName(i.article);
+      return ni.length >= 4 && (ni.includes(nd) || nd.includes(ni));
+    });
+    if (m) return m;
+  }
+  return null;
+}
+
+// Route une ligne BL vers la bonne mercuriale d'après la catégorie suggérée par l'OCR
+function routeBLLine(categorie) {
+  const c = (categorie || '').toLowerCase();
+  if (c.includes('boisson') || c.includes('vin') || c.includes('spirit') || c.includes('biere') || c.includes('bière')) return 'bev';
+  return 'food';
+}
+
+// Mappe une catégorie OCR vers un "groupe" de la mercuriale boissons
+function mapBevGroupe(categorie) {
+  const c = (categorie || '').toLowerCase();
+  if (c.includes('vin')) return 'Vin';
+  if (c.includes('spirit')) return 'spirit';
+  if (c.includes('biere') || c.includes('bière')) return 'Bières';
+  return 'Minérales';
+}
 
 function switchMercuriale(type) {
   currentMercuriale = type;
-  inventoryData = JSON.parse(JSON.stringify(type === 'food' ? MONA_FOOD : MONA_BEV));
+  inventoryData = pharStores[type]; // référence persistante (les saisies sont conservées)
   activeCategoryFilter = 'all';
 
   document.querySelectorAll('.mercuriale-tab').forEach(t => {
@@ -2454,7 +2570,8 @@ function renderInventoryTable() {
     <th style="min-width: 220px;">Article</th>
     <th>Unité</th>
     <th>Fournisseur</th>
-    <th class="pos-col" style="text-align: right;">P.U.</th>`;
+    <th class="pos-col" style="text-align: right;">P.U.</th>
+    <th class="pos-col" style="text-align: right;" title="Coût Unitaire Moyen Pondéré — recalculé à chaque entrée BL">CUMP</th>`;
   posList.forEach((pos, i) => {
     headHtml += `<th class="pos-col" title="${pos}">${pos}</th>`;
   });
@@ -2493,7 +2610,8 @@ function renderInventoryTable() {
       </td>
       <td><span class="inv-cat-cell">${item.unite || '—'}</span></td>
       <td style="font-size: 11px; color: var(--gray-500);">${item.fournisseur || '—'}</td>
-      <td class="inv-pu-cell">${item.pu.toFixed(2)}</td>`;
+      <td class="inv-pu-cell">${item.pu.toFixed(2)}</td>
+      <td class="inv-pu-cell" style="${(item.cump != null && Math.abs(item.cump - item.pu) > 0.005) ? 'color: var(--phar-navy); font-weight: 600;' : 'color: var(--gray-500);'}" title="CUMP — valorisation pondérée des entrées">${(item.cump != null ? item.cump : item.pu).toFixed(2)}</td>`;
 
     posList.forEach((pos, i) => {
       const val = item.pos[pos] || 0;
@@ -2536,6 +2654,7 @@ function updateInventoryQty(originalIdx, pos, value) {
   if (mainIdx >= 0) {
     inventoryData[mainIdx].pos[pos] = value;
   }
+  saveStores();
   renderInventoryTable();
   renderInventoryKPIs();
 }
@@ -3003,7 +3122,7 @@ function displayScanResults(data) {
     <div class="scan-result-card">
       <div class="scan-result-header">
         <h3>✓ Extraction réussie · ${data.type_document === 'facture' ? 'Facture' : 'Bon de livraison'}</h3>
-        <button class="btn btn-outline btn-sm" onclick="saveScanResult()">Enregistrer dans Achats</button>
+        <button class="btn btn-primary btn-sm" onclick="openBLIntegrationModal()">Intégrer à l'inventaire</button>
       </div>
       <div class="scan-meta-grid">
         <div class="scan-meta-item">
@@ -3032,9 +3151,335 @@ function displayScanResults(data) {
   window._lastScanResult = data;
 }
 
-function saveScanResult() {
-  if (!window._lastScanResult) return;
-  alert(`✓ Bon de livraison enregistré.\n\nFournisseur : ${window._lastScanResult.fournisseur?.nom}\nArticles : ${window._lastScanResult.articles?.length}\nMontant : ${window._lastScanResult.total_ttc?.toFixed(2)} CHF\n\nProchain pas : rapprochement automatique avec votre catalogue PHAR.`);
+/* ============================================================
+   FEATURE B — Intégration d'un BL validé à l'inventaire
+   Upsert article · recalcul CUMP · journal des entrées
+   ============================================================ */
+
+let _blDraft = [];          // lignes de travail éditables
+let _blMeta = {};           // fournisseur / numero / date du BL
+let _blPos = { food: null, bev: null }; // POS de réception par mercuriale
+
+// Options <option> pour un select de point de vente
+function posOptions(merc, selected) {
+  return POS_DEFINITIONS[merc].map(p =>
+    `<option value="${p.replace(/"/g, '&quot;')}" ${p === selected ? 'selected' : ''}>${p}</option>`
+  ).join('');
+}
+
+// Ouvre la modale d'intégration à partir du dernier scan
+function openBLIntegrationModal() {
+  const data = window._lastScanResult;
+  if (!data || !data.articles || !data.articles.length) {
+    alert('Aucun article extrait à intégrer. Relancez un scan.');
+    return;
+  }
+  _blMeta = {
+    fournisseur: data.fournisseur?.nom || '',
+    numero: data.numero || '',
+    date: data.date_document || new Date().toLocaleDateString('fr-CH')
+  };
+  // Construit les lignes de travail (toutes incluses par défaut)
+  _blDraft = data.articles.map(a => {
+    const merc = routeBLLine(a.categorie_suggeree);
+    return {
+      designation: a.designation || '',
+      quantite: parseFloat(a.quantite) || 0,
+      unite: a.unite || 'pce',
+      prix: parseFloat(a.prix_unitaire_ht) || 0,
+      categorie: a.categorie_suggeree || 'Autres',
+      merc,
+      include: true
+    };
+  });
+  // POS de réception par défaut = 1er POS de chaque mercuriale
+  _blPos.food = POS_DEFINITIONS.food[0];
+  _blPos.bev = POS_DEFINITIONS.bev[0];
+
+  renderBLIntegrationModal();
+  document.getElementById('bl-integ-modal').classList.add('visible');
+}
+
+function closeBLIntegrationModal() {
+  document.getElementById('bl-integ-modal').classList.remove('visible');
+}
+
+// (Re)construit le contenu de la modale d'intégration
+function renderBLIntegrationModal() {
+  const usesFood = _blDraft.some(l => l.include && l.merc === 'food');
+  const usesBev = _blDraft.some(l => l.include && l.merc === 'bev');
+
+  let posSelectors = '';
+  if (usesFood) posSelectors += `
+    <div>
+      <label class="field-label">Point de réception · Food</label>
+      <select onchange="_blPos.food = this.value; renderBLIntegrationModal();">${posOptions('food', _blPos.food)}</select>
+    </div>`;
+  if (usesBev) posSelectors += `
+    <div>
+      <label class="field-label">Point de réception · Boissons</label>
+      <select onchange="_blPos.bev = this.value; renderBLIntegrationModal();">${posOptions('bev', _blPos.bev)}</select>
+    </div>`;
+
+  const rows = _blDraft.map((l, idx) => {
+    const store = pharStores[l.merc];
+    const match = l.include ? matchInventoryItem(store, l.designation) : null;
+    const oldStock = match ? computeItemTotal(match) : 0;
+    const oldCump = match ? (match.cump != null ? match.cump : match.pu) : 0;
+    const newCump = l.include
+      ? (match ? recalcCUMP(oldStock, oldCump, l.quantite, l.prix) : l.prix)
+      : 0;
+    const matchBadge = match
+      ? `<span class="badge badge-success" title="${match.article.replace(/"/g,'&quot;')}">Existant</span>`
+      : `<span class="badge badge-info">Nouvel article</span>`;
+    const cumpInfo = !l.include ? '—'
+      : (match
+          ? `${oldCump.toFixed(2)} → <strong style="color:var(--phar-navy)">${newCump.toFixed(2)}</strong>`
+          : `<strong style="color:var(--phar-navy)">${newCump.toFixed(2)}</strong>`);
+
+    return `<tr style="${l.include ? '' : 'opacity:0.45;'}">
+      <td style="text-align:center;"><input type="checkbox" ${l.include ? 'checked' : ''} onchange="_blDraft[${idx}].include=this.checked; renderBLIntegrationModal();"></td>
+      <td><input type="text" value="${l.designation.replace(/"/g,'&quot;')}" onchange="_blDraft[${idx}].designation=this.value; renderBLIntegrationModal();" style="width:100%; min-width:160px;"></td>
+      <td><input type="number" value="${l.quantite}" step="0.01" min="0" onchange="_blDraft[${idx}].quantite=parseFloat(this.value)||0; renderBLIntegrationModal();" style="width:64px; text-align:right;"></td>
+      <td><input type="text" value="${l.unite.replace(/"/g,'&quot;')}" onchange="_blDraft[${idx}].unite=this.value;" style="width:54px;"></td>
+      <td><input type="number" value="${l.prix}" step="0.01" min="0" onchange="_blDraft[${idx}].prix=parseFloat(this.value)||0; renderBLIntegrationModal();" style="width:74px; text-align:right;"></td>
+      <td><select onchange="_blDraft[${idx}].merc=this.value; renderBLIntegrationModal();">
+        <option value="food" ${l.merc==='food'?'selected':''}>Food</option>
+        <option value="bev" ${l.merc==='bev'?'selected':''}>Boissons</option>
+      </select></td>
+      <td>${matchBadge}</td>
+      <td class="num" style="font-size:11px;">${cumpInfo}</td>
+    </tr>`;
+  }).join('');
+
+  const nbIncluded = _blDraft.filter(l => l.include).length;
+  const nbNew = _blDraft.filter(l => l.include && !matchInventoryItem(pharStores[l.merc], l.designation)).length;
+
+  document.getElementById('bl-integ-body').innerHTML = `
+    <div class="scan-meta-grid" style="margin-bottom:18px;">
+      <div class="scan-meta-item"><div class="label">Fournisseur</div><div class="value">${_blMeta.fournisseur || '—'}</div></div>
+      <div class="scan-meta-item"><div class="label">N° BL</div><div class="value">${_blMeta.numero || '—'}</div></div>
+      <div class="scan-meta-item"><div class="label">Date</div><div class="value">${_blMeta.date || '—'}</div></div>
+    </div>
+    <div class="form-grid form-grid-2" style="margin-bottom:18px;">${posSelectors}</div>
+    <div class="inv-table-scroll" style="max-height:340px; overflow:auto;">
+      <table class="data-table" style="font-size:12px;">
+        <thead><tr>
+          <th style="width:34px;"></th><th>Désignation</th>
+          <th class="num">Qté</th><th>Unité</th><th class="num">PU HT</th>
+          <th>Mercuriale</th><th>Rapprochement</th><th class="num">CUMP (av.→ap.)</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:14px; padding:10px 14px; background:var(--phar-navy-faint); border-radius:var(--radius); font-size:12px; color:var(--phar-navy);">
+      <strong>${nbIncluded}</strong> ligne(s) à intégrer · <strong>${nbNew}</strong> nouvel(le)(s) article(s) créé(s) · le reste sera mis à jour (stock incrémenté + CUMP recalculé).
+    </div>`;
+
+  const btn = document.getElementById('bl-integ-confirm');
+  btn.textContent = `Valider l'entrée en stock (${nbIncluded})`;
+  btn.disabled = nbIncluded === 0;
+}
+
+// Applique l'intégration : upsert + CUMP + journal + persistance
+function integrateBLToInventory() {
+  const lines = _blDraft.filter(l => l.include);
+  if (!lines.length) return;
+  if (lines.some(l => l.quantite <= 0)) {
+    if (!confirm('Certaines lignes ont une quantité nulle — elles seront ignorées. Continuer ?')) return;
+  }
+
+  let created = 0, updated = 0;
+  const ts = new Date().toISOString();
+
+  lines.forEach(l => {
+    if (l.quantite <= 0) return;
+    const merc = l.merc;
+    const store = pharStores[merc];
+    const posDest = _blPos[merc] || POS_DEFINITIONS[merc][0];
+    let item = matchInventoryItem(store, l.designation);
+    let cumpAvant, cumpApres, stockAvant;
+
+    if (item) {
+      stockAvant = computeItemTotal(item);
+      cumpAvant = item.cump != null ? item.cump : item.pu;
+      cumpApres = recalcCUMP(stockAvant, cumpAvant, l.quantite, l.prix);
+      item.pos[posDest] = (item.pos[posDest] || 0) + l.quantite;
+      item.cump = cumpApres;
+      item.historique_prix.push({ date: _blMeta.date, prix: l.prix, fournisseur: _blMeta.fournisseur, bl_numero: _blMeta.numero });
+      updated++;
+    } else {
+      // Création d'un nouvel article dans la mercuriale ciblée
+      stockAvant = 0;
+      cumpAvant = 0;
+      cumpApres = l.prix;
+      const posObj = Object.fromEntries(POS_DEFINITIONS[merc].map(p => [p, 0]));
+      posObj[posDest] = l.quantite;
+      item = ensureCostFields({
+        groupe: merc === 'food' ? 'Food' : mapBevGroupe(l.categorie),
+        categorie: merc === 'food' ? (l.categorie || 'Autres') : undefined,
+        article: l.designation,
+        mill: merc === 'bev' ? '' : undefined,
+        unite: l.unite,
+        fournisseur: _blMeta.fournisseur,
+        pu: l.prix,
+        pos: posObj,
+        mois_m1: 0,
+        cump: l.prix,
+        prix_reference: l.prix,
+        historique_prix: [{ date: _blMeta.date, prix: l.prix, fournisseur: _blMeta.fournisseur, bl_numero: _blMeta.numero }],
+        lightspeed_sku: null
+      });
+      store.push(item);
+      created++;
+    }
+
+    // Journalise l'entrée en stock
+    stockMovements.unshift({
+      id: 'mv_' + Math.random().toString(36).slice(2, 10),
+      ts,
+      date: _blMeta.date,
+      mercuriale: merc,
+      article: l.designation,
+      fournisseur: _blMeta.fournisseur,
+      bl_numero: _blMeta.numero,
+      quantite: l.quantite,
+      unite: l.unite,
+      prix_unitaire: l.prix,
+      pos: posDest,
+      stock_avant: stockAvant,
+      cump_avant: cumpAvant,
+      cump_apres: cumpApres
+    });
+  });
+
+  saveStores();
+  closeBLIntegrationModal();
+
+  // Bascule l'affichage sur l'inventaire pour montrer le résultat
+  document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+  const navInv = document.querySelector('.nav-item[data-module="inventaire"]');
+  if (navInv) navInv.classList.add('active');
+  document.getElementById('module-inventaire').classList.add('active');
+  document.getElementById('breadcrumb-current').textContent = MODULE_TITLES.inventaire;
+
+  // Affiche la mercuriale qui a reçu le plus de lignes
+  const targetMerc = lines.filter(l => l.merc === 'bev').length > lines.filter(l => l.merc === 'food').length ? 'bev' : 'food';
+  switchMercuriale(targetMerc);
+
+  setTimeout(() => alert(`✓ Entrée en stock enregistrée\n\nBL ${_blMeta.numero || '—'} · ${_blMeta.fournisseur || '—'}\n${created} article(s) créé(s) · ${updated} mis à jour\nCUMP recalculé et journalisé.\n\nConsultez « Journal des entrées » pour le détail.`), 150);
+}
+
+/* ---------- Journal des mouvements de stock ---------- */
+
+function openMovementsModal() {
+  renderMovementsModal();
+  document.getElementById('movements-modal').classList.add('visible');
+}
+function closeMovementsModal() {
+  document.getElementById('movements-modal').classList.remove('visible');
+}
+
+function renderMovementsModal() {
+  const body = document.getElementById('movements-body');
+  if (!stockMovements.length) {
+    body.innerHTML = `<div style="padding:32px; text-align:center; color:var(--gray-500); font-size:13px;">Aucune entrée en stock enregistrée pour l'instant.<br>Scannez un BL dans le module Achats puis cliquez « Intégrer à l'inventaire ».</div>`;
+    return;
+  }
+  const rows = stockMovements.map(m => `
+    <tr>
+      <td style="font-size:11px; color:var(--gray-500);">${m.date || '—'}</td>
+      <td><span class="badge ${m.mercuriale === 'bev' ? 'badge-info' : 'badge-success'}">${m.mercuriale === 'bev' ? 'Boissons' : 'Food'}</span></td>
+      <td><strong>${m.article}</strong><div style="font-size:10px; color:var(--gray-500);">${m.pos}</div></td>
+      <td style="font-size:11px;">${m.fournisseur || '—'}</td>
+      <td style="font-size:11px;">${m.bl_numero || '—'}</td>
+      <td class="num">${m.quantite.toString().replace('.', ',')} ${m.unite}</td>
+      <td class="num">${m.prix_unitaire.toFixed(2)}</td>
+      <td class="num" style="font-size:11px;">${m.cump_avant.toFixed(2)} → <strong style="color:var(--phar-navy)">${m.cump_apres.toFixed(2)}</strong></td>
+    </tr>`).join('');
+  body.innerHTML = `
+    <div class="inv-table-scroll" style="max-height:420px; overflow:auto;">
+      <table class="data-table" style="font-size:12px;">
+        <thead><tr>
+          <th>Date</th><th>Merc.</th><th>Article / POS</th><th>Fournisseur</th>
+          <th>N° BL</th><th class="num">Qté</th><th class="num">PU HT</th><th class="num">CUMP av.→ap.</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// Export du journal au format Excel (SheetJS déjà chargé)
+function exportMovementsExcel() {
+  if (!stockMovements.length) { alert('Journal vide.'); return; }
+  const header = ['Date', 'Mercuriale', 'Article', 'POS', 'Fournisseur', 'N° BL', 'Quantité', 'Unité', 'PU HT', 'CUMP avant', 'CUMP après'];
+  const rows = [header];
+  stockMovements.forEach(m => rows.push([
+    m.date, m.mercuriale === 'bev' ? 'Boissons' : 'Food', m.article, m.pos,
+    m.fournisseur, m.bl_numero, m.quantite, m.unite, m.prix_unitaire, m.cump_avant, m.cump_apres
+  ]));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Journal entrées');
+  XLSX.writeFile(wb, `Journal_entrees_stock_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// Réinitialise toutes les données locales (stores + journal)
+function resetLocalData() {
+  if (!confirm('Réinitialiser TOUTES les données locales ?\n\nLes mercuriales reviendront aux données MONA d\'origine et le journal des entrées sera effacé. Action irréversible.')) return;
+  try {
+    localStorage.removeItem(LS_KEYS.stores);
+    localStorage.removeItem(LS_KEYS.movements);
+  } catch (e) {}
+  location.reload();
+}
+
+/* ---------- Injection des modales (au chargement) ---------- */
+function injectBLModals() {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="modal-backdrop" id="bl-integ-modal">
+      <div class="modal" style="max-width: 860px;">
+        <div class="modal-header">
+          <div class="modal-title">Intégrer le BL à l'inventaire</div>
+          <button class="modal-close" onclick="closeBLIntegrationModal()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body" id="bl-integ-body"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeBLIntegrationModal()">Annuler</button>
+          <button class="btn btn-primary" id="bl-integ-confirm" onclick="integrateBLToInventory()">Valider l'entrée en stock</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop" id="movements-modal">
+      <div class="modal" style="max-width: 900px;">
+        <div class="modal-header">
+          <div class="modal-title">Journal des entrées en stock</div>
+          <button class="modal-close" onclick="closeMovementsModal()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body" id="movements-body"></div>
+        <div class="modal-footer" style="justify-content: space-between;">
+          <button class="btn btn-ghost btn-sm" onclick="resetLocalData()" style="color: var(--danger);">Réinitialiser les données locales</button>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-outline" onclick="exportMovementsExcel()">Exporter (Excel)</button>
+            <button class="btn btn-primary" onclick="closeMovementsModal()">Fermer</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  // Fermeture au clic sur le fond
+  ['bl-integ-modal', 'movements-modal'].forEach(id => {
+    document.getElementById(id).addEventListener('click', (e) => {
+      if (e.target.id === id) e.target.classList.remove('visible');
+    });
+  });
 }
 
 /* ============================================================
@@ -3096,24 +3541,29 @@ function createNewInventory() {
   const date = document.getElementById('new-inv-date').value;
 
   // Apply mode
+  let built;
   if (newInvMode === 'report') {
     // Take base mercuriale, copy current stocks as new theoretical (we mark mois_m1 with the original m1)
     const base = newInvMercuriale === 'food' ? MONA_FOOD : MONA_BEV;
-    inventoryData = base.map(item => ({
+    built = base.map(item => ({
       ...item,
       pos: { ...item.pos },
       mois_m1: newInvMercuriale === 'food' ? (item.mois_m1 || 0) : 0
     }));
   } else if (newInvMode === 'empty') {
     const base = newInvMercuriale === 'food' ? MONA_FOOD : MONA_BEV;
-    inventoryData = base.map(item => ({
+    built = base.map(item => ({
       ...item,
       pos: Object.fromEntries(Object.keys(item.pos).map(k => [k, 0])),
       mois_m1: newInvMercuriale === 'food' ? (item.mois_m1 || 0) : 0
     }));
   } else {
-    inventoryData = [];
+    built = [];
   }
+  built.forEach(ensureCostFields);              // champs CUMP / prix_reference / historique
+  pharStores[newInvMercuriale] = built;         // remplace le store de cette mercuriale
+  inventoryData = pharStores[newInvMercuriale];
+  saveStores();
 
   currentMercuriale = newInvMercuriale;
   activeCategoryFilter = 'all';
@@ -3153,6 +3603,9 @@ document.addEventListener('keydown', (e) => {
     document.querySelectorAll('.modal-backdrop.visible').forEach(m => m.classList.remove('visible'));
   }
 });
+
+// Injecte les modales de la Feature B (intégration BL + journal)
+injectBLModals();
 
 
 </script>
