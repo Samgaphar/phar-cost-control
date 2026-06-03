@@ -1464,6 +1464,31 @@
   .mt-md { margin-top: 16px; }
   .mb-md { margin-bottom: 16px; }
 
+  /* ===== PRINT ===== */
+  @media print {
+    body { background: white; font-size: 12px; }
+    .app { display: block; }
+    aside, header, .brand, .status-bar, .api-bar, .module-actions, .btn, .inv-toolbar, .pos-legend, .ing-add-row { display: none !important; }
+    main { padding: 0; overflow: visible; }
+    .module { display: none !important; }
+    .module.printing { display: block !important; }
+    .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+    table { page-break-inside: avoid; }
+    .ratio-block, .kpi, .card { break-inside: avoid; }
+    .inv-table-scroll { overflow: visible; }
+    table.inv-table { min-width: 0; }
+    .print-header { display: block !important; margin-bottom: 20px; border-bottom: 2px solid #263B8B; padding-bottom: 12px; }
+    .print-footer { display: block !important; margin-top: 24px; font-size: 10px; color: #6B6B65; border-top: 1px solid #E8E8E8; padding-top: 8px; }
+  }
+  .print-header, .print-footer { display: none; }
+
+  /* ===== TOAST ===== */
+  #toast-container { position: fixed; bottom: 56px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: var(--gray-900); color: var(--white); padding: 12px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; box-shadow: 0 4px 16px rgba(0,0,0,0.2); animation: slideToast 0.25s ease; max-width: 360px; }
+  .toast.success { background: var(--success); }
+  .toast.error { background: var(--danger); }
+  @keyframes slideToast { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
   /* ===== RESPONSIVE ===== */
   @media (max-width: 1100px) {
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }
@@ -2299,7 +2324,19 @@ function updateIng(idx, field, value) {
 }
 function addIngredient() { ingredients.push({ name: '', qty: 0, unit: 'kg', price: 0 }); renderIngredients(); }
 function removeIng(idx) { ingredients.splice(idx, 1); renderIngredients(); }
-function importFromCatalog() { alert('Le catalogue sera connecté au module Achats pour piocher dans les ingrédients déjà référencés.'); }
+function importFromCatalog() {
+  const items = [...pharStores.food, ...pharStores.bev];
+  if (!items.length) { showToast('Aucun article dans la mercuriale.', 'error'); return; }
+  const names = items.map(i => i.article).slice(0, 50);
+  const chosen = prompt('Articles disponibles dans la mercuriale (tapez le numéro):\n' +
+    names.map((n, i) => `${i+1}. ${n}`).join('\n'));
+  const idx = parseInt(chosen) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= names.length) return;
+  const item = items[idx];
+  ingredients.push({ name: item.article, qty: 1, unit: item.unite || 'kg', price: item.pu });
+  renderIngredients();
+  showToast(`"${item.article}" ajouté`, 'success');
+}
 
 function recalc() {
   const portions = parseFloat(document.getElementById('recipe-portions').value) || 1;
@@ -2357,9 +2394,93 @@ function recalc() {
   }
 }
 
-function exportRecipePDF() { alert('Génération du PDF fiche technique — sera connectée à un exporteur PDF natif.'); }
-function duplicateRecipe() { alert('✓ Recette dupliquée — vous pouvez créer une variante.'); }
-function saveRecipe() { alert(`✓ Recette "${document.getElementById('recipe-name').value}" enregistrée dans votre catalogue PHAR.`); }
+/* ============================================================
+   RECETTES — Sauvegarde & export
+   ============================================================ */
+const LS_RECIPES = 'phar_recipes_v1';
+
+function loadRecipes() {
+  try { return JSON.parse(localStorage.getItem(LS_RECIPES)) || []; } catch(e) { return []; }
+}
+function saveRecipeList(list) {
+  try { localStorage.setItem(LS_RECIPES, JSON.stringify(list)); } catch(e) {}
+}
+
+function saveRecipe() {
+  const name = document.getElementById('recipe-name').value.trim() || 'Sans titre';
+  const list = loadRecipes();
+  const existing = list.findIndex(r => r.name === name);
+  const entry = {
+    id: existing >= 0 ? list[existing].id : 'rec_' + Math.random().toString(36).slice(2, 9),
+    name,
+    category: document.getElementById('recipe-category').value,
+    portions: parseFloat(document.getElementById('recipe-portions').value) || 1,
+    targetRatio: parseFloat(document.getElementById('target-ratio').value) || 30,
+    sellingPrice: parseFloat(document.getElementById('selling-price').value) || 0,
+    tva: document.getElementById('tva-rate').value,
+    ingredients: JSON.parse(JSON.stringify(ingredients)),
+    savedAt: new Date().toISOString()
+  };
+  if (existing >= 0) list[existing] = entry; else list.unshift(entry);
+  saveRecipeList(list);
+  showToast(`✓ Recette "${name}" enregistrée`, 'success');
+}
+
+function duplicateRecipe() {
+  const name = document.getElementById('recipe-name').value.trim() || 'Sans titre';
+  document.getElementById('recipe-name').value = name + ' (copie)';
+  saveRecipe();
+  showToast('Recette dupliquée — vous pouvez la modifier.', 'success');
+}
+
+function exportRecipePDF() {
+  const name = document.getElementById('recipe-name').value || 'Recette';
+  const portions = document.getElementById('recipe-portions').value;
+  const category = document.getElementById('recipe-category').value;
+  const sellingPrice = document.getElementById('selling-price').value;
+  const targetRatio = document.getElementById('target-ratio').value;
+
+  const totalCost = ingredients.reduce((s, i) => s + i.qty * i.price, 0);
+  const perPortion = totalCost / (parseFloat(portions) || 1);
+  const actualRatio = sellingPrice > 0 ? (perPortion / sellingPrice * 100).toFixed(1) : '—';
+
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Fiche technique · ${name}</title>
+  <style>
+    body { font-family: 'Arial', sans-serif; font-size: 13px; color: #1A1A18; margin: 32px; }
+    h1 { font-size: 22px; color: #263B8B; margin: 0 0 4px; }
+    .meta { color: #6B6B65; font-size: 12px; margin-bottom: 20px; }
+    .kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
+    .kpi { border: 1px solid #E8E8E8; border-radius: 4px; padding: 12px; }
+    .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: #6B6B65; margin-bottom: 4px; }
+    .kpi-val { font-size: 20px; font-weight: 800; color: #263B8B; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th { background: #263B8B; color: white; padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; }
+    td { padding: 7px 12px; border-bottom: 1px solid #F4F3F3; }
+    td.num { text-align: right; font-weight: 600; }
+    .footer { margin-top: 32px; font-size: 10px; color: #9A9A95; border-top: 1px solid #E8E8E8; padding-top: 8px; }
+    @media print { body { margin: 16px; } }
+  </style></head><body>
+  <h1>${name}</h1>
+  <div class="meta">${category} · ${portions} couverts · Imprimé le ${new Date().toLocaleDateString('fr-CH')}</div>
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-label">Coût matière total</div><div class="kpi-val">${totalCost.toFixed(2)} CHF</div></div>
+    <div class="kpi"><div class="kpi-label">Coût par couvert</div><div class="kpi-val">${perPortion.toFixed(2)} CHF</div></div>
+    <div class="kpi"><div class="kpi-label">Prix de vente HT</div><div class="kpi-val">${sellingPrice} CHF</div></div>
+    <div class="kpi"><div class="kpi-label">Food cost réel</div><div class="kpi-val">${actualRatio}%</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Ingrédient</th><th>Qté</th><th>Unité</th><th>Prix CHF/u</th><th>Sous-total</th></tr></thead>
+    <tbody>${ingredients.map(i => `<tr><td>${i.name}</td><td class="num">${i.qty}</td><td>${i.unit}</td><td class="num">${i.price.toFixed(2)}</td><td class="num">${(i.qty*i.price).toFixed(2)}</td></tr>`).join('')}
+    <tr style="font-weight:800; background:#F2F4FA;"><td colspan="4" style="text-align:right;">Total</td><td class="num">${totalCost.toFixed(2)} CHF</td></tr>
+    </tbody>
+  </table>
+  <div class="footer">PHAR Cost v1.0 · Hôtel Bellerive · Vevey · Ratio cible : ${targetRatio}%</div>
+  <script>window.onload=()=>{ window.print(); }</script>
+  </body></html>`);
+  win.document.close();
+}
 
 ['recipe-portions', 'target-ratio', 'selling-price'].forEach(id => {
   document.getElementById(id).addEventListener('input', recalc);
@@ -2774,7 +2895,64 @@ function renderInventoryKPIs() {
 }
 
 function importMercurialeExcel() {
-  alert('Pour importer une vraie mercuriale Excel :\n\n• Cliquez sur "Importer Excel"\n• Sélectionnez votre fichier (.xlsx)\n• PHAR Cost détecte automatiquement la structure (colonnes POS, P.U., M-1)\n• Validez le mapping des colonnes\n\nCette fonctionnalité utilise SheetJS qui est déjà chargé dans l\'app.');
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.xlsx,.xls,.csv';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rows.length < 2) { showToast('Fichier vide ou invalide.', 'error'); return; }
+
+      // Tente de détecter la colonne "article/désignation" et "P.U."
+      const header = rows[0].map(c => String(c).toLowerCase());
+      const artIdx = header.findIndex(h => h.includes('article') || h.includes('désignation') || h.includes('designation') || h.includes('produit') || h.includes('libellé'));
+      const puIdx = header.findIndex(h => h.includes('p.u') || h.includes('pu') || h.includes('prix unit') || h.includes('prix_unit') || h.includes('tarif'));
+      const unitIdx = header.findIndex(h => h.includes('unité') || h.includes('unite') || h.includes('unit'));
+      const fournIdx = header.findIndex(h => h.includes('fourni') || h.includes('supplier'));
+
+      if (artIdx < 0) { showToast('Colonne "article" introuvable dans le fichier.', 'error'); return; }
+
+      const posList = POS_DEFINITIONS[currentMercuriale];
+      let imported = 0;
+      rows.slice(1).forEach(row => {
+        const art = String(row[artIdx] || '').trim();
+        if (!art) return;
+        const pu = parseFloat(row[puIdx]) || 0;
+        const unite = unitIdx >= 0 ? String(row[unitIdx] || 'pce').trim() : 'pce';
+        const fournisseur = fournIdx >= 0 ? String(row[fournIdx] || '').trim() : '';
+        const posObj = Object.fromEntries(posList.map(p => [p, 0]));
+        const existing = matchInventoryItem(pharStores[currentMercuriale], art);
+        if (existing) {
+          if (pu > 0) existing.pu = pu;
+        } else {
+          const newItem = ensureCostFields({
+            groupe: currentMercuriale === 'food' ? 'Food' : 'Minérales',
+            categorie: currentMercuriale === 'food' ? 'Importé' : undefined,
+            article: art, unite, fournisseur, pu, pos: posObj, mois_m1: 0,
+            cump: pu, prix_reference: pu, historique_prix: [], lightspeed_sku: null
+          });
+          pharStores[currentMercuriale].push(newItem);
+        }
+        imported++;
+      });
+
+      inventoryData = pharStores[currentMercuriale];
+      saveStores();
+      renderInventoryFilters();
+      renderInventoryPosLegend();
+      renderInventoryTable();
+      renderInventoryKPIs();
+      showToast(`✓ ${imported} article(s) importé(s) depuis ${file.name}`, 'success');
+    } catch(err) {
+      showToast('Erreur lecture fichier : ' + err.message, 'error');
+    }
+  };
+  input.click();
 }
 
 function exportInventoryExcel() {
@@ -2809,7 +2987,50 @@ function exportInventoryExcel() {
 }
 
 function exportInventoryPDF() {
-  alert('Génération du PDF signé — prêt à être branché à jsPDF ou un service serveur.');
+  const filtered = getFilteredInventory();
+  const posList = POS_DEFINITIONS[currentMercuriale];
+  const showM1 = currentMercuriale === 'food';
+  const totalValue = filtered.reduce((s, i) => s + computeItemTotal(i) * i.pu, 0);
+  const mercLabel = currentMercuriale === 'food' ? 'Food' : 'Boissons';
+  const dateStr = new Date().toLocaleDateString('fr-CH');
+
+  const rowsHtml = filtered.map(item => {
+    const total = computeItemTotal(item);
+    const value = total * item.pu;
+    const posVals = posList.map(p => `<td class="num">${item.pos[p] || 0}</td>`).join('');
+    const m1 = showM1 ? `<td class="num">${(item.mois_m1||0).toFixed(2)}</td><td class="num">${(total-(item.mois_m1||0)).toFixed(1)}</td>` : '';
+    return `<tr><td>${item.article}</td><td>${item.unite||''}</td><td>${item.fournisseur||''}</td><td class="num">${item.pu.toFixed(2)}</td>${posVals}<td class="num"><strong>${total.toFixed(2)}</strong></td><td class="num"><strong>${value.toFixed(2)}</strong></td>${m1}</tr>`;
+  }).join('');
+  const posHeaders = posList.map(p => `<th>${p}</th>`).join('');
+  const m1Headers = showM1 ? '<th>M-1</th><th>Δ</th>' : '';
+
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Inventaire ${mercLabel} · ${dateStr}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #1A1A18; margin: 24px; }
+    h1 { font-size: 18px; color: #263B8B; margin: 0 0 2px; }
+    .meta { color: #6B6B65; font-size: 11px; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    th { background: #263B8B; color: white; padding: 6px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
+    td { padding: 5px 8px; border-bottom: 1px solid #F4F3F3; font-size: 11px; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .total-row { background: #E8EBF5; font-weight: 800; }
+    .footer { margin-top: 20px; font-size: 9px; color: #9A9A95; border-top: 1px solid #E8E8E8; padding-top: 6px; display: flex; justify-content: space-between; }
+    @media print { body { margin: 12px; } @page { size: A4 landscape; margin: 12mm; } }
+  </style></head><body>
+  <h1>Inventaire ${mercLabel} · Hôtel Bellerive</h1>
+  <div class="meta">Imprimé le ${dateStr} · ${filtered.length} articles · Valeur totale : ${totalValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,"'")} CHF</div>
+  <table>
+    <thead><tr><th>Article</th><th>Unité</th><th>Fournisseur</th><th>P.U.</th>${posHeaders}<th>Total</th><th>Valeur CHF</th>${m1Headers}</tr></thead>
+    <tbody>${rowsHtml}
+    <tr class="total-row"><td colspan="${4 + posList.length}">TOTAL VALORISATION</td><td class="num">${totalValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,"'")}</td>${showM1?'<td></td><td></td>':''}</tr>
+    </tbody>
+  </table>
+  <div class="footer"><span>PHAR Cost v1.0 · © PHAR SA 2026</span><span>Responsable : M. Roduit · Signature : _______________________</span></div>
+  <script>window.onload=()=>{ window.print(); }</script>
+  </body></html>`);
+  win.document.close();
 }
 
 function validateInventory() {
@@ -3794,6 +4015,223 @@ injectBLModals();
 // Étape 1 — initialise le dépôt des bulletins
 renderBLRepository();
 
+/* ============================================================
+   TOAST SYSTEM
+   ============================================================ */
+(function() {
+  const el = document.createElement('div');
+  el.id = 'toast-container';
+  document.body.appendChild(el);
+})();
+
+function showToast(msg, type = '') {
+  const container = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast' + (type ? ' ' + type : '');
+  t.textContent = msg;
+  container.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.4s'; setTimeout(() => t.remove(), 400); }, 3000);
+}
+
+/* ============================================================
+   MODAL — Mes recettes
+   ============================================================ */
+function injectRecipesModal() {
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <div class="modal-backdrop" id="recipes-modal">
+      <div class="modal" style="max-width:700px;">
+        <div class="modal-header">
+          <div class="modal-title">Mes recettes</div>
+          <button class="modal-close" onclick="document.getElementById('recipes-modal').classList.remove('visible')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body" id="recipes-modal-body"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="document.getElementById('recipes-modal').classList.remove('visible')">Fermer</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  document.getElementById('recipes-modal').addEventListener('click', e => {
+    if (e.target.id === 'recipes-modal') e.target.classList.remove('visible');
+  });
+}
+
+function openRecipesModal() {
+  const list = loadRecipes();
+  const body = document.getElementById('recipes-modal-body');
+  if (!list.length) {
+    body.innerHTML = `<div style="text-align:center; padding:40px; color:var(--gray-500);">
+      <div style="font-size:32px; margin-bottom:12px;">📋</div>
+      <div style="font-weight:600;">Aucune recette sauvegardée</div>
+      <div style="font-size:12px; margin-top:6px;">Cliquez sur « Enregistrer » dans le module Fiches techniques.</div>
+    </div>`;
+  } else {
+    body.innerHTML = `<table class="data-table">
+      <thead><tr><th>Recette</th><th>Catégorie</th><th>Couverts</th><th class="num">Coût/couvert</th><th class="num">Food cost</th><th></th></tr></thead>
+      <tbody>${list.map(r => {
+        const totalCost = r.ingredients.reduce((s,i) => s + i.qty*i.price, 0);
+        const perPortion = totalCost / (r.portions||1);
+        const fc = r.sellingPrice > 0 ? (perPortion/r.sellingPrice*100).toFixed(1)+'%' : '—';
+        return `<tr>
+          <td><strong>${r.name}</strong><div style="font-size:10px;color:var(--gray-500);">${new Date(r.savedAt).toLocaleDateString('fr-CH')}</div></td>
+          <td>${r.category}</td>
+          <td class="num">${r.portions}</td>
+          <td class="num">${perPortion.toFixed(2)} CHF</td>
+          <td class="num">${fc}</td>
+          <td style="text-align:right; white-space:nowrap;">
+            <button class="btn btn-ghost btn-sm" onclick="loadRecipe('${r.id}')">Charger</button>
+            <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="deleteRecipe('${r.id}')">✕</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  }
+  document.getElementById('recipes-modal').classList.add('visible');
+}
+
+function loadRecipe(id) {
+  const list = loadRecipes();
+  const r = list.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('recipe-name').value = r.name;
+  document.getElementById('recipe-category').value = r.category;
+  document.getElementById('recipe-portions').value = r.portions;
+  document.getElementById('target-ratio').value = r.targetRatio;
+  document.getElementById('selling-price').value = r.sellingPrice;
+  document.getElementById('tva-rate').value = r.tva;
+  ingredients = JSON.parse(JSON.stringify(r.ingredients));
+  renderIngredients();
+  document.getElementById('recipes-modal').classList.remove('visible');
+  showToast(`Recette "${r.name}" chargée`, 'success');
+}
+
+function deleteRecipe(id) {
+  if (!confirm('Supprimer cette recette ?')) return;
+  const list = loadRecipes().filter(r => r.id !== id);
+  saveRecipeList(list);
+  openRecipesModal();
+  showToast('Recette supprimée.', '');
+}
+
+injectRecipesModal();
+
+/* ============================================================
+   BOUTON "Mes recettes"
+   ============================================================ */
+document.querySelector('.btn-outline[onclick=""]');
+// Binding via selector sur le bouton "Mes recettes" du header module
+document.querySelectorAll('#module-recettes .module-actions .btn').forEach(btn => {
+  if (btn.textContent.trim() === 'Mes recettes') {
+    btn.addEventListener('click', openRecipesModal);
+  }
+  if (btn.textContent.trim() === 'Importer') {
+    btn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          try {
+            const data = JSON.parse(ev.target.result);
+            if (!data.name || !Array.isArray(data.ingredients)) throw new Error('Format invalide');
+            const list = loadRecipes();
+            data.id = 'rec_' + Math.random().toString(36).slice(2,9);
+            data.savedAt = new Date().toISOString();
+            list.unshift(data);
+            saveRecipeList(list);
+            loadRecipe(data.id);
+            showToast(`Recette "${data.name}" importée`, 'success');
+          } catch(err) { showToast('Fichier invalide : ' + err.message, 'error'); }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    });
+  }
+});
+
+/* ============================================================
+   BOUTONS SIDEBAR OUTILS
+   ============================================================ */
+document.querySelectorAll('.nav-item:not([data-module])').forEach(item => {
+  const label = item.querySelector('span:last-child')?.textContent?.trim();
+  item.addEventListener('click', () => {
+    if (label === 'Catalogue') {
+      const items = [...pharStores.food, ...pharStores.bev];
+      const win = window.open('', '_blank');
+      win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Catalogue articles</title>
+      <style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px;}h1{color:#263B8B;}table{width:100%;border-collapse:collapse;}th{background:#263B8B;color:white;padding:6px 10px;text-align:left;font-size:10px;text-transform:uppercase;}td{padding:6px 10px;border-bottom:1px solid #F4F3F3;}@media print{@page{margin:12mm;}}</style>
+      </head><body><h1>Catalogue articles — PHAR Cost</h1>
+      <table><thead><tr><th>Article</th><th>Groupe</th><th>Fournisseur</th><th>Unité</th><th>P.U.</th></tr></thead>
+      <tbody>${items.map(i=>`<tr><td>${i.article}</td><td>${i.groupe||i.categorie||''}</td><td>${i.fournisseur||''}</td><td>${i.unite||''}</td><td style="text-align:right;">${(i.pu||0).toFixed(2)} CHF</td></tr>`).join('')}</tbody></table>
+      <script>window.onload=()=>window.print();</script></body></html>`);
+      win.document.close();
+    } else if (label === 'Fournisseurs') {
+      const suppliers = [...new Set([...pharStores.food, ...pharStores.bev].map(i => i.fournisseur).filter(Boolean))].sort();
+      alert(`Fournisseurs référencés (${suppliers.length}) :\n\n` + suppliers.join('\n'));
+    } else if (label === 'Rapports') {
+      showToast('Module Rapports — disponible dans la prochaine version.', '');
+    }
+  });
+});
+
+/* ============================================================
+   BOUTONS DASHBOARD — Alertes
+   ============================================================ */
+document.querySelectorAll('#module-dashboard .alert .btn').forEach(btn => {
+  const title = btn.closest('.alert')?.querySelector('.alert-title')?.textContent;
+  btn.addEventListener('click', () => {
+    if (title?.includes('Hausse de prix')) {
+      alert('Hausse détectée : Filet de bœuf CH chez Boucherie du Marché\n\n• Prix semaine S-2 : 42.50 CHF/kg\n• Prix semaine S-0 : 47.70 CHF/kg\n• Variation : +12.3%\n\nRecommandation : négocier avec le fournisseur ou substituer par un autre article.\nImpact estimé food cost : +0.8pt sur le mois.');
+    } else if (title?.includes('Beverage')) {
+      alert('Beverage cost au-dessus de la cible\n\n• Coût actuel : 22.8% vs cible 20%\n• Écart : +2.8pt\n\nActions suggérées :\n1. Vérifier les pertes au bar lobby\n2. Contrôler les comptages d\'inventaire de fin de service\n3. Auditer les recettes cocktails');
+    } else if (title?.includes('Inventaire piscine')) {
+      document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+      document.querySelector('.nav-item[data-module="inventaire"]').classList.add('active');
+      document.getElementById('module-inventaire').classList.add('active');
+      document.getElementById('breadcrumb-current').textContent = MODULE_TITLES.inventaire;
+      showToast('Reprise de l\'inventaire en cours…', '');
+    }
+  });
+});
+
+/* ============================================================
+   BOUTON "Valider partiellement"
+   ============================================================ */
+document.querySelector('#module-inventaire .btn-outline[onclick=""]');
+document.querySelectorAll('#module-inventaire .btn').forEach(btn => {
+  if (btn.textContent.trim() === 'Valider partiellement') {
+    btn.addEventListener('click', () => {
+      const filtered = getFilteredInventory();
+      const withStock = filtered.filter(i => computeItemTotal(i) > 0);
+      if (!withStock.length) { showToast('Aucun article avec stock à valider.', 'error'); return; }
+      const total = withStock.reduce((s,i) => s + computeItemTotal(i)*i.pu, 0);
+      if (confirm(`Valider partiellement ${withStock.length} article(s) avec stock saisi ?\n\nValorisation partielle : ${total.toFixed(2)} CHF\n\nLes articles à zéro restent en attente.`)) {
+        showToast(`✓ ${withStock.length} article(s) validés partiellement`, 'success');
+      }
+    });
+  }
+  if (btn.textContent.trim().includes('Historique') && btn.closest('#module-inventaire')) {
+    btn.addEventListener('click', openMovementsModal);
+  }
+});
+
+/* Bouton Historique Achats */
+document.querySelectorAll('#module-achats .btn').forEach(btn => {
+  if (btn.textContent.trim() === 'Historique') {
+    btn.addEventListener('click', () => { switchAchatsTab('bulletins'); });
+  }
+  if (btn.textContent.trim() === '+ Nouveau scan') {
+    btn.addEventListener('click', () => { switchAchatsTab('scan'); });
+  }
+});
 
 </script>
 
