@@ -1502,6 +1502,30 @@
     main { padding: 20px 16px 80px; }
     .module-title { font-size: 24px; }
   }
+
+  /* === Rapprochement multi-BL -> facture === */
+  .recon-panel { padding: 18px 20px; margin-bottom: 14px; }
+  .recon-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .recon-title { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--phar-navy); }
+  .recon-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: start; }
+  .recon-block { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 14px; background: var(--gray-50, #FBFBFA); }
+  .recon-block h4 { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gray-500); }
+  .recon-line { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 13px; }
+  .recon-line .lbl { color: var(--gray-500); }
+  .recon-line .val { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-900); }
+  .recon-line.total { border-top: 1px solid var(--gray-200); margin-top: 6px; padding-top: 8px; font-size: 14px; }
+  .recon-input-row { margin-bottom: 10px; }
+  .recon-ecart { border-radius: var(--radius); padding: 14px; }
+  .recon-ecart.idle { background: var(--gray-100); border: 1px solid var(--gray-200); }
+  .recon-ecart.ok   { background: var(--success-light); border: 1px solid var(--success); }
+  .recon-ecart.warn { background: var(--warning-light); border: 1px solid var(--warning); }
+  .recon-ecart.bad  { background: var(--danger-light);  border: 1px solid var(--danger); }
+  .recon-ecart.ok   #rec-status { color: var(--success); }
+  .recon-ecart.warn #rec-status { color: var(--warning); }
+  .recon-ecart.bad  #rec-status { color: var(--danger); }
+  .bl-check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--phar-navy); vertical-align: middle; }
+  .bl-check-col { width: 34px; text-align: center; }
+  @media (max-width: 900px) { .recon-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -1846,6 +1870,44 @@
             <button class="btn btn-outline btn-sm" id="bl-reconcile-btn" onclick="alert('Le moteur de rapprochement sur facture arrive à l\\'étape 2.')">Créer un rapprochement</button>
           </div>
         </div>
+
+        <!-- Panneau de rapprochement multi-BL -> facture -->
+        <div class="card recon-panel" id="bl-reconcile-panel">
+          <div class="recon-head">
+            <div class="recon-title">Rapprochement sur facture</div>
+            <button class="btn btn-ghost btn-sm" onclick="clearBLSelection()">Tout désélectionner</button>
+          </div>
+          <div class="recon-grid">
+
+            <div class="recon-block">
+              <h4>Montant estimé · BL cochés</h4>
+              <div class="recon-line"><span class="lbl"><span id="rec-count">0</span> bulletin(s) sélectionné(s)</span></div>
+              <div class="recon-line"><span class="lbl">Total HT</span><span class="val"><span id="rec-sum-ht">0.00</span> CHF</span></div>
+              <div class="recon-line"><span class="lbl">Dont TVA</span><span class="val"><span id="rec-sum-tva">0.00</span> CHF</span></div>
+              <div class="recon-line total"><span class="lbl">Total TTC</span><span class="val"><span id="rec-sum-ttc">0.00</span> CHF</span></div>
+            </div>
+
+            <div class="recon-block">
+              <h4>Facture théorique</h4>
+              <div class="recon-input-row">
+                <label class="field-label" for="rec-fac-ht">Total HT facture</label>
+                <input type="number" id="rec-fac-ht" step="0.01" min="0" placeholder="0.00" oninput="updateReconcilePanel()">
+              </div>
+              <div class="recon-input-row">
+                <label class="field-label" for="rec-fac-ttc">Total TTC facture</label>
+                <input type="number" id="rec-fac-ttc" step="0.01" min="0" placeholder="0.00" oninput="updateReconcilePanel()">
+              </div>
+            </div>
+
+            <div class="recon-ecart idle" id="rec-ecart-box">
+              <div class="recon-line"><span class="lbl">Écart HT (facture − BL)</span><span class="val" id="rec-ecart-ht">—</span></div>
+              <div class="recon-line"><span class="lbl">Écart TTC (facture − BL)</span><span class="val" id="rec-ecart-ttc">—</span></div>
+              <div class="recon-line total"><span class="lbl">Statut</span><span class="val" id="rec-status">Cochez des bulletins</span></div>
+            </div>
+
+          </div>
+        </div>
+
         <div class="card" style="padding: 0;" id="bl-repo-card">
           <div id="bl-repo-table"></div>
         </div>
@@ -3760,6 +3822,98 @@ function filterBLRepo(status) {
   renderBLRepository();
 }
 
+/* ---------- Sélection multi-BL & estimation de rapprochement ---------- */
+const _blSelection = new Set();
+
+function _reconCHF(n) {
+  return (Number(n) || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+}
+
+function _visibleBLs() {
+  const all = pharBLs || [];
+  return _blRepoFilter === 'all' ? all : all.filter(b => b.statut === _blRepoFilter);
+}
+
+function toggleBLSelect(id, checked) {
+  if (checked) _blSelection.add(id); else _blSelection.delete(id);
+  _syncReconMaster();
+  updateReconcilePanel();
+}
+
+function toggleAllBLVisible(checked) {
+  _visibleBLs().forEach(b => { if (checked) _blSelection.add(b.id); else _blSelection.delete(b.id); });
+  renderBLRepository();
+}
+
+function clearBLSelection() {
+  _blSelection.clear();
+  renderBLRepository();
+}
+
+function _syncReconMaster() {
+  const master = document.getElementById('bl-check-all');
+  if (!master) return;
+  const visible = _visibleBLs();
+  const selVisible = visible.filter(b => _blSelection.has(b.id)).length;
+  master.checked = visible.length > 0 && selVisible === visible.length;
+  master.indeterminate = selVisible > 0 && selVisible < visible.length;
+}
+
+function updateReconcilePanel() {
+  const sel = (pharBLs || []).filter(b => _blSelection.has(b.id));
+  const sumHT  = sel.reduce((s, b) => s + (b.total_ht  || 0), 0);
+  const sumTVA = sel.reduce((s, b) => s + (b.total_tva || 0), 0);
+  const sumTTC = sel.reduce((s, b) => s + (b.total_ttc || 0), 0);
+
+  const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setTxt('rec-count', sel.length);
+  setTxt('rec-sum-ht',  _reconCHF(sumHT));
+  setTxt('rec-sum-tva', _reconCHF(sumTVA));
+  setTxt('rec-sum-ttc', _reconCHF(sumTTC));
+
+  const htEl  = document.getElementById('rec-fac-ht');
+  const ttcEl = document.getElementById('rec-fac-ttc');
+  const facHT  = htEl  ? parseFloat(htEl.value)  : NaN;
+  const facTTC = ttcEl ? parseFloat(ttcEl.value) : NaN;
+  const hasHT  = !isNaN(facHT);
+  const hasTTC = !isNaN(facTTC);
+
+  const ecartHT  = hasHT  ? facHT  - sumHT  : null;
+  const ecartTTC = hasTTC ? facTTC - sumTTC : null;
+
+  const fmtEcart = (ecart, base) => {
+    if (ecart === null) return '—';
+    const pct  = base > 0 ? (ecart / base) * 100 : 0;
+    const sign = ecart > 0 ? '+' : '';
+    return `${sign}${_reconCHF(ecart)} CHF (${sign}${pct.toFixed(1)} %)`;
+  };
+  setTxt('rec-ecart-ht',  fmtEcart(ecartHT,  facHT));
+  setTxt('rec-ecart-ttc', fmtEcart(ecartTTC, facTTC));
+
+  const box = document.getElementById('rec-ecart-box');
+  const status = document.getElementById('rec-status');
+  if (!box || !status) return;
+  box.classList.remove('ok', 'warn', 'bad', 'idle');
+
+  const absVals = [];
+  if (ecartHT  !== null) absVals.push(Math.abs(ecartHT));
+  if (ecartTTC !== null) absVals.push(Math.abs(ecartTTC));
+  const pctVals = [];
+  if (hasHT  && facHT  > 0) pctVals.push(Math.abs(ecartHT  / facHT  * 100));
+  if (hasTTC && facTTC > 0) pctVals.push(Math.abs(ecartTTC / facTTC * 100));
+
+  if (sel.length === 0 || absVals.length === 0) {
+    box.classList.add('idle');
+    status.textContent = sel.length === 0 ? 'Cochez des bulletins' : 'Saisir la facture';
+    return;
+  }
+  const worstAbs = Math.max(...absVals);
+  const worstPct = pctVals.length ? Math.max(...pctVals) : 0;
+  if (worstAbs <= 0.05)   { box.classList.add('ok');   status.textContent = 'Concordant'; }
+  else if (worstPct <= 1) { box.classList.add('warn'); status.textContent = 'Écart mineur'; }
+  else                    { box.classList.add('bad');  status.textContent = 'Écart à vérifier'; }
+}
+
 function renderBLRepository() {
   const host = document.getElementById('bl-repo-table');
   if (!host) return;
@@ -3776,6 +3930,7 @@ function renderBLRepository() {
     host.innerHTML = `<div class="bl-empty">${all.length
       ? 'Aucun bulletin pour ce filtre.'
       : 'Aucun bulletin scanné pour l\'instant. Scannez vos documents dans l\'onglet « Scan bulletins ».'}</div>`;
+    updateReconcilePanel();
     return;
   }
 
@@ -3783,6 +3938,7 @@ function renderBLRepository() {
     <table class="data-table">
       <thead>
         <tr>
+          <th class="bl-check-col"><input type="checkbox" id="bl-check-all" class="bl-check" onchange="toggleAllBLVisible(this.checked)" title="Tout sélectionner (vue courante)"></th>
           <th>Date</th><th>Fournisseur</th><th>N°</th>
           <th class="num">Articles</th><th class="num">Total HT</th><th class="num">Total TTC</th>
           <th>Statut</th><th></th>
@@ -3792,6 +3948,7 @@ function renderBLRepository() {
         ${list.map(bl => {
           const st = BL_STATUT_LABELS[bl.statut] || BL_STATUT_LABELS.a_rapprocher;
           return `<tr>
+            <td class="bl-check-col"><input type="checkbox" class="bl-check" ${_blSelection.has(bl.id) ? 'checked' : ''} onchange="toggleBLSelect('${bl.id}', this.checked)"></td>
             <td>${bl.date || '—'}</td>
             <td><strong>${bl.fournisseur || '—'}</strong></td>
             <td>${bl.numero || '—'}</td>
@@ -3808,6 +3965,8 @@ function renderBLRepository() {
         }).join('')}
       </tbody>
     </table>`;
+  _syncReconMaster();
+  updateReconcilePanel();
 }
 
 function viewBL(blId) {
