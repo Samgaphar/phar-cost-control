@@ -984,16 +984,437 @@ function injectFCModals() {
     </div>`;
   document.body.appendChild(wrap);
 
-  ['fc-art-modal', 'fc-detail-modal'].forEach(id => {
-    document.getElementById(id).addEventListener('click', e => {
+  // ── Modal rapprochement facture ──────────────────────────────
+  const reconModal = document.createElement('div');
+  reconModal.innerHTML = `
+    <div class="modal-backdrop" id="fc-recon-modal">
+      <div class="modal" style="max-width:680px;">
+        <div class="modal-header">
+          <div class="modal-title">Rapprochement sur facture</div>
+          <button class="modal-close" onclick="document.getElementById('fc-recon-modal').classList.remove('visible')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+
+          <!-- Résumé des BL sélectionnés -->
+          <div style="margin-bottom:20px;">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);margin-bottom:10px;">BL sélectionnés</div>
+            <div class="scan-meta-grid" style="grid-template-columns:repeat(3,1fr);background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-200);padding:14px 16px;gap:16px;">
+              <div class="scan-meta-item">
+                <div class="label">Bulletins</div>
+                <div class="value"><span id="fc-recon-nb-bl">—</span> BL</div>
+              </div>
+              <div class="scan-meta-item" style="grid-column:2/-1;">
+                <div class="label">Fournisseur(s)</div>
+                <div class="value" id="fc-recon-fournisseurs" style="font-size:13px;">—</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px;">
+              <div style="padding:12px;background:var(--phar-navy-faint);border-radius:var(--radius);border:1px solid var(--phar-navy-pale);">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--phar-navy);font-weight:700;margin-bottom:4px;">Total BL HT</div>
+                <div style="font-family:'Archivo';font-weight:800;font-size:16px;color:var(--phar-navy);font-variant-numeric:tabular-nums;"><span id="fc-recon-bl-ht">—</span> CHF</div>
+              </div>
+              <div style="padding:12px;background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-200);">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-500);font-weight:700;margin-bottom:4px;">Dont TVA</div>
+                <div style="font-family:'Archivo';font-weight:700;font-size:16px;font-variant-numeric:tabular-nums;"><span id="fc-recon-bl-tva">—</span> CHF</div>
+              </div>
+              <div style="padding:12px;background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-200);">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-500);font-weight:700;margin-bottom:4px;">Total BL TTC</div>
+                <div style="font-family:'Archivo';font-weight:700;font-size:16px;font-variant-numeric:tabular-nums;"><span id="fc-recon-bl-ttc">—</span> CHF</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Saisie montants facture -->
+          <div class="form-grid form-grid-2" style="margin-bottom:18px;">
+            <div>
+              <label class="field-label">Référence facture</label>
+              <input type="text" id="fc-recon-ref" placeholder="Ex : FAC-2026-0421">
+            </div>
+            <div>
+              <label class="field-label">Date facture</label>
+              <input type="text" id="fc-recon-date" placeholder="JJ.MM.AAAA">
+            </div>
+            <div>
+              <label class="field-label">Montant facture HT (CHF)</label>
+              <input type="number" id="fc-recon-fac-ht" step="0.01" min="0" placeholder="0.00"
+                     oninput="_fcReconUpdateEcart()" style="font-variant-numeric:tabular-nums;">
+            </div>
+            <div>
+              <label class="field-label">Montant facture TTC (CHF)</label>
+              <input type="number" id="fc-recon-fac-ttc" step="0.01" min="0" placeholder="0.00"
+                     oninput="_fcReconUpdateEcart()" style="font-variant-numeric:tabular-nums;">
+            </div>
+          </div>
+
+          <!-- Boîte écart -->
+          <div class="recon-ecart idle" id="fc-recon-ecart-box" style="margin-bottom:0;">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);margin-bottom:10px;">Analyse de l'écart</div>
+            <div class="recon-grid" style="grid-template-columns:1fr 1fr 1fr;gap:12px;">
+              <div>
+                <div style="font-size:11px;color:var(--gray-500);margin-bottom:2px;">Écart HT (facture − BL)</div>
+                <div style="font-family:'Archivo';font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;" id="fc-recon-ecart-ht">—</div>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--gray-500);margin-bottom:2px;">Écart TTC (facture − BL)</div>
+                <div style="font-family:'Archivo';font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;" id="fc-recon-ecart-ttc">—</div>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--gray-500);margin-bottom:2px;">Statut</div>
+                <div style="font-weight:700;font-size:13px;" id="fc-recon-statut">Saisissez les montants</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="document.getElementById('fc-recon-modal').classList.remove('visible')">Annuler</button>
+          <button class="btn btn-primary" id="fc-recon-confirm-btn" onclick="fcConfirmerRapprochement()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px;height:14px;stroke-width:2;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Créer la facture consolidée
+          </button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(reconModal);
+
+  // ── Liste des factures consolidées injectée dans l'onglet rapprochement ──
+  // On l'ajoute après le div fc-bl-rapprochement dans le pane rapprochement
+  const rapprPane = document.getElementById('achats-pane-rapprochement');
+  if (rapprPane) {
+    const facDiv = document.createElement('div');
+    facDiv.style.marginTop = '24px';
+    facDiv.innerHTML = `
+      <div class="section-bar">
+        <div class="section-bar-num">F</div>
+        <div class="section-bar-label">Factures consolidées</div>
+        <div class="section-bar-line"></div>
+      </div>
+      <div class="card" style="padding:0;">
+        <div id="fc-factures-list">
+          <div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px;">
+            Aucune facture consolidée pour l'instant.
+          </div>
+        </div>
+      </div>`;
+    rapprPane.appendChild(facDiv);
+  }
+
+  ['fc-art-modal', 'fc-detail-modal', 'fc-recon-modal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', e => {
       if (e.target.id === id) e.target.classList.remove('visible');
     });
   });
 
   // Enter to submit article form
-  document.getElementById('fc-art-modal').addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.target.matches('select')) fcSaveArticle();
+  const artModal = document.getElementById('fc-art-modal');
+  if (artModal) artModal.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.target.matches('select, textarea')) fcSaveArticle();
   });
+}
+
+/* ─── MODULE FC-2 : Rapprochement facture ────────────────────── */
+
+/**
+ * Ouvre le modal de rapprochement en consolidant les BL sélectionnés.
+ * Appelé depuis le bouton "Rapprocher une facture".
+ */
+function fcCreerRapprochement() {
+  const sel = (typeof pharBLs !== 'undefined' ? pharBLs : [])
+    .filter(b => typeof _blSelection !== 'undefined' && _blSelection.has(b.id));
+
+  if (!sel.length) {
+    if (typeof showToast === 'function')
+      showToast('Cochez d\'abord des bulletins dans la liste.', 'error');
+    return;
+  }
+
+  // Calcul totaux BL sélectionnés
+  const sumHT  = sel.reduce((s, b) => s + (b.total_ht  || 0), 0);
+  const sumTVA = sel.reduce((s, b) => s + (b.total_tva || 0), 0);
+  const sumTTC = sel.reduce((s, b) => s + (b.total_ttc || 0), 0);
+
+  // Fournisseurs uniques
+  const fournisseurs = [...new Set(sel.map(b => b.fournisseur).filter(Boolean))];
+
+  // Lecture des montants facture déjà saisis dans le panneau de rapprochement
+  const facHTEl  = document.getElementById('rec-fac-ht');
+  const facTTCEl = document.getElementById('rec-fac-ttc');
+  const facHT    = facHTEl  ? parseFloat(facHTEl.value)  : NaN;
+  const facTTC   = facTTCEl ? parseFloat(facTTCEl.value) : NaN;
+
+  // Pré-remplir le modal
+  const modal = document.getElementById('fc-recon-modal');
+  if (!modal) return;
+
+  // Infos résumé BL
+  document.getElementById('fc-recon-nb-bl').textContent     = sel.length;
+  document.getElementById('fc-recon-fournisseurs').textContent = fournisseurs.join(', ') || '—';
+  document.getElementById('fc-recon-bl-ht').textContent     = _fcFmtMontant(sumHT);
+  document.getElementById('fc-recon-bl-tva').textContent    = _fcFmtMontant(sumTVA);
+  document.getElementById('fc-recon-bl-ttc').textContent    = _fcFmtMontant(sumTTC);
+
+  // Pré-remplir montants facture depuis le panneau (si déjà saisis)
+  document.getElementById('fc-recon-fac-ht').value  = isNaN(facHT)  ? '' : facHT.toFixed(2);
+  document.getElementById('fc-recon-fac-ttc').value = isNaN(facTTC) ? '' : facTTC.toFixed(2);
+  document.getElementById('fc-recon-ref').value     = '';
+  document.getElementById('fc-recon-date').value    = new Date().toLocaleDateString('fr-CH');
+
+  // Stocker les IDs pour la confirmation
+  modal.dataset.blIds  = JSON.stringify(sel.map(b => b.id));
+  modal.dataset.sumHT  = sumHT;
+  modal.dataset.sumTVA = sumTVA;
+  modal.dataset.sumTTC = sumTTC;
+
+  // Calculer l'écart initial
+  _fcReconUpdateEcart();
+
+  modal.classList.add('visible');
+}
+
+/** Recalcule l'écart dans le modal rapprochement en temps réel */
+function _fcReconUpdateEcart() {
+  const modal  = document.getElementById('fc-recon-modal');
+  if (!modal) return;
+
+  const sumHT  = parseFloat(modal.dataset.sumHT)  || 0;
+  const sumTTC = parseFloat(modal.dataset.sumTTC) || 0;
+
+  const facHTEl  = document.getElementById('fc-recon-fac-ht');
+  const facTTCEl = document.getElementById('fc-recon-fac-ttc');
+  const facHT    = facHTEl  ? parseFloat(facHTEl.value)  : NaN;
+  const facTTC   = facTTCEl ? parseFloat(facTTCEl.value) : NaN;
+
+  const hasHT  = !isNaN(facHT);
+  const hasTTC = !isNaN(facTTC);
+
+  const ecartHT  = hasHT  ? facHT  - sumHT  : null;
+  const ecartTTC = hasTTC ? facTTC - sumTTC : null;
+
+  const fmtE = (e, base) => {
+    if (e === null) return '—';
+    const pct  = base > 0 ? (Math.abs(e) / base * 100).toFixed(1) : '0.0';
+    const sign = e >= 0 ? '+' : '';
+    return `${sign}${_fcFmtMontant(e)} CHF &nbsp;(${sign}${e >= 0 ? '' : '-'}${pct}%)`;
+  };
+
+  const htEl  = document.getElementById('fc-recon-ecart-ht');
+  const ttcEl = document.getElementById('fc-recon-ecart-ttc');
+  const stEl  = document.getElementById('fc-recon-statut');
+  const box   = document.getElementById('fc-recon-ecart-box');
+  const btn   = document.getElementById('fc-recon-confirm-btn');
+
+  if (htEl)  htEl.innerHTML  = fmtE(ecartHT,  facHT);
+  if (ttcEl) ttcEl.innerHTML = fmtE(ecartTTC, facTTC);
+
+  // Statut coloré
+  if (box) box.classList.remove('ok', 'warn', 'bad', 'idle');
+
+  if (!hasHT && !hasTTC) {
+    if (box && stEl) { box.classList.add('idle'); stEl.textContent = 'Saisissez les montants facture'; }
+    if (btn) btn.disabled = false; // on peut créer sans facture (saisie ultérieure)
+    return;
+  }
+
+  const absEcarts = [ecartHT, ecartTTC].filter(e => e !== null).map(Math.abs);
+  const pctEcarts = [];
+  if (hasHT  && facHT  > 0 && ecartHT  !== null) pctEcarts.push(Math.abs(ecartHT  / facHT  * 100));
+  if (hasTTC && facTTC > 0 && ecartTTC !== null) pctEcarts.push(Math.abs(ecartTTC / facTTC * 100));
+
+  const maxAbs = Math.max(...absEcarts, 0);
+  const maxPct = pctEcarts.length ? Math.max(...pctEcarts) : 0;
+
+  let statut, cls;
+  if (maxAbs <= 0.05)   { statut = '✓ Concordant — écart nul';          cls = 'ok';   }
+  else if (maxPct <= 1) { statut = '~ Écart mineur (< 1%)';              cls = 'warn'; }
+  else                  { statut = '✗ Écart significatif — à vérifier';  cls = 'bad';  }
+
+  if (box && stEl) { box.classList.add(cls); stEl.textContent = statut; }
+  if (btn) btn.disabled = false;
+}
+
+/** Confirme et crée la facture consolidée */
+function fcConfirmerRapprochement() {
+  const modal = document.getElementById('fc-recon-modal');
+  if (!modal) return;
+
+  const blIds  = JSON.parse(modal.dataset.blIds || '[]');
+  const sumHT  = parseFloat(modal.dataset.sumHT)  || 0;
+  const sumTVA = parseFloat(modal.dataset.sumTVA) || 0;
+  const sumTTC = parseFloat(modal.dataset.sumTTC) || 0;
+
+  const facHT  = parseFloat(document.getElementById('fc-recon-fac-ht').value)  || null;
+  const facTTC = parseFloat(document.getElementById('fc-recon-fac-ttc').value) || null;
+  const ref    = document.getElementById('fc-recon-ref').value.trim();
+  const date   = document.getElementById('fc-recon-date').value.trim();
+
+  const ecartHT  = facHT  !== null ? facHT  - sumHT  : null;
+  const ecartTTC = facTTC !== null ? facTTC - sumTTC : null;
+
+  let statut = 'concordant';
+  if (ecartHT !== null || ecartTTC !== null) {
+    const maxPct = Math.max(
+      facHT  > 0 && ecartHT  !== null ? Math.abs(ecartHT  / facHT  * 100) : 0,
+      facTTC > 0 && ecartTTC !== null ? Math.abs(ecartTTC / facTTC * 100) : 0
+    );
+    if (Math.max(Math.abs(ecartHT || 0), Math.abs(ecartTTC || 0)) <= 0.05) statut = 'concordant';
+    else if (maxPct <= 1)  statut = 'ecart_mineur';
+    else                   statut = 'ecart_significatif';
+  }
+
+  // Récupérer les noms fournisseurs
+  const bls = (typeof pharBLs !== 'undefined' ? pharBLs : []).filter(b => blIds.includes(b.id));
+  const fournisseurs = [...new Set(bls.map(b => b.fournisseur).filter(Boolean))];
+
+  // Créer la facture consolidée
+  const facture = {
+    id:          'fac_' + Math.random().toString(36).slice(2, 10),
+    created_at:  new Date().toISOString(),
+    ref,
+    date,
+    fournisseurs,
+    bl_ids:      blIds,
+    nb_bl:       blIds.length,
+    bl_ht:       sumHT,
+    bl_tva:      sumTVA,
+    bl_ttc:      sumTTC,
+    fac_ht:      facHT,
+    fac_ttc:     facTTC,
+    ecart_ht:    ecartHT,
+    ecart_ttc:   ecartTTC,
+    statut
+  };
+
+  // Persister dans localStorage
+  const LS_FAC = 'phar_fc_factures_v1';
+  let factures = [];
+  try { factures = JSON.parse(localStorage.getItem(LS_FAC)) || []; } catch(e) {}
+  factures.unshift(facture);
+  try { localStorage.setItem(LS_FAC, JSON.stringify(factures)); } catch(e) {}
+
+  // Marquer les BL comme rapprochés
+  if (typeof pharBLs !== 'undefined') {
+    blIds.forEach(id => {
+      const bl = pharBLs.find(b => b.id === id);
+      if (bl) { bl.statut = 'rapproche'; bl.facture_id = facture.id; }
+    });
+    if (typeof saveStores === 'function') saveStores();
+  }
+
+  // Vider la sélection
+  if (typeof _blSelection !== 'undefined') _blSelection.clear();
+
+  modal.classList.remove('visible');
+
+  // Rerender BL repo
+  if (typeof renderBLRepository === 'function') renderBLRepository();
+  if (typeof updateReconcilePanel === 'function') updateReconcilePanel();
+
+  // Afficher la facture créée dans un toast + log
+  const statutLabel = { concordant:'Concordant', ecart_mineur:'Écart mineur', ecart_significatif:'Écart significatif' }[statut] || statut;
+  if (typeof showToast === 'function')
+    showToast(`✓ Facture consolidée créée · ${blIds.length} BL · ${_fcFmtMontant(sumHT)} CHF HT · ${statutLabel}`, 'success');
+
+  // Afficher le résumé dans la liste des factures (onglet rapprochement)
+  _fcRefreshFacturesList();
+}
+
+/** Formate un montant CHF avec apostrophe suisse */
+function _fcFmtMontant(n) {
+  if (n === null || isNaN(n)) return '—';
+  const abs = Math.abs(n);
+  const fmt = abs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+  return n < 0 ? '-' + fmt : fmt;
+}
+
+/** Affiche la liste des factures consolidées dans l'onglet rapprochement */
+function _fcRefreshFacturesList() {
+  const wrap = document.getElementById('fc-factures-list');
+  if (!wrap) return;
+
+  const LS_FAC = 'phar_fc_factures_v1';
+  let factures = [];
+  try { factures = JSON.parse(localStorage.getItem(LS_FAC)) || []; } catch(e) {}
+
+  if (!factures.length) {
+    wrap.innerHTML = `<div style="padding:32px;text-align:center;color:var(--gray-400);font-size:13px;">
+      Aucune facture consolidée. Sélectionnez des BL et cliquez « Rapprocher une facture ».</div>`;
+    return;
+  }
+
+  const statutBadge = {
+    concordant:          'badge-success',
+    ecart_mineur:        'badge-warning',
+    ecart_significatif:  'badge-danger'
+  };
+  const statutLabel = {
+    concordant:          'Concordant',
+    ecart_mineur:        'Écart mineur',
+    ecart_significatif:  'Écart significatif'
+  };
+
+  const rows = factures.map(f => `
+    <tr>
+      <td style="font-size:11px;color:var(--gray-500);">${f.date || '—'}</td>
+      <td style="font-weight:600;">${f.fournisseurs.join(', ') || '—'}</td>
+      <td style="font-size:12px;color:var(--gray-500);">${f.ref || '—'}</td>
+      <td style="text-align:center;">
+        <span class="badge badge-info">${f.nb_bl} BL</span>
+      </td>
+      <td class="num">${_fcFmtMontant(f.bl_ht)}</td>
+      <td class="num" style="color:${f.fac_ht !== null ? 'var(--gray-900)' : 'var(--gray-400)'};">
+        ${f.fac_ht !== null ? _fcFmtMontant(f.fac_ht) : '—'}
+      </td>
+      <td class="num" style="font-weight:700;color:${
+        f.ecart_ht === null ? 'var(--gray-400)'
+        : Math.abs(f.ecart_ht) <= 0.05 ? 'var(--success)'
+        : Math.abs(f.ecart_ht / (f.fac_ht || 1) * 100) <= 1 ? 'var(--warning)'
+        : 'var(--danger)'};">
+        ${f.ecart_ht !== null
+          ? (f.ecart_ht >= 0 ? '+' : '') + _fcFmtMontant(f.ecart_ht)
+          : '—'}
+      </td>
+      <td><span class="badge ${statutBadge[f.statut] || 'badge-info'}">${statutLabel[f.statut] || f.statut}</span></td>
+      <td style="text-align:right;">
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="_fcDeleteFacture('${f.id}')" title="Supprimer">✕</button>
+      </td>
+    </tr>`).join('');
+
+  wrap.innerHTML = `
+    <table class="data-table" style="font-size:13px;">
+      <thead><tr>
+        <th>Date</th><th>Fournisseur(s)</th><th>Réf. facture</th>
+        <th style="text-align:center;">BL inclus</th>
+        <th class="num">Total BL HT</th>
+        <th class="num">Montant facture HT</th>
+        <th class="num">Écart HT</th>
+        <th>Statut</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function _fcDeleteFacture(id) {
+  if (!confirm('Supprimer cette facture consolidée ?\nLes BL associés reprendront le statut « À rapprocher ».')) return;
+  const LS_FAC = 'phar_fc_factures_v1';
+  let factures = [];
+  try { factures = JSON.parse(localStorage.getItem(LS_FAC)) || []; } catch(e) {}
+  const fac = factures.find(f => f.id === id);
+  if (fac && typeof pharBLs !== 'undefined') {
+    fac.bl_ids.forEach(blId => {
+      const bl = pharBLs.find(b => b.id === blId);
+      if (bl) { bl.statut = 'a_rapprocher'; bl.facture_id = null; }
+    });
+    if (typeof saveStores === 'function') saveStores();
+  }
+  factures = factures.filter(f => f.id !== id);
+  try { localStorage.setItem(LS_FAC, JSON.stringify(factures)); } catch(e) {}
+  _fcRefreshFacturesList();
+  if (typeof renderBLRepository === 'function') renderBLRepository();
+  if (typeof showToast === 'function') showToast('Facture supprimée, BL remis en attente.', '');
 }
 
 /* ─── Init ───────────────────────────────────────────────────── */
@@ -1004,3 +1425,4 @@ renderFC2BLRapprochement();
 renderFC3();
 renderFC4();
 renderFC5();
+_fcRefreshFacturesList();
