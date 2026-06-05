@@ -16,11 +16,12 @@
      Couleurs extraites du deck corporate officiel
      ============================================================ */
   :root {
-    --phar-navy: #263B8B;
-    --phar-navy-dark: #1A2A66;
-    --phar-navy-light: #3A4FA8;
-    --phar-navy-pale: #E8EBF5;
-    --phar-navy-faint: #F2F4FA;
+    /* ── PHAR Brand Colors v2 — identité officielle 05.2026 ── */
+    --phar-navy:       #2E3192;   /* Indigo PHAR exact (PDF) */
+    --phar-navy-dark:  #1E2170;   /* Hover / actif */
+    --phar-navy-light: #4347B8;   /* Variante claire */
+    --phar-navy-pale:  #E6E7F8;   /* Fond pâle */
+    --phar-navy-faint: #F0F1FC;   /* Fond quasi-blanc */
 
     --white: #FFFFFF;
     --gray-50: #FAFAFA;
@@ -1571,6 +1572,366 @@
   }
   .print-header, .print-footer { display: none; }
 
+  /* ═══════════════════════════════════════════════════════════
+     PHAR BRAND REDESIGN v2 — Identité officielle 05.2026
+     Hexagone · Indigo #2E3192 · Swiss minimalism
+     ═══════════════════════════════════════════════════════════ */
+
+  /* ── Brand block v2 ─────────────────────────────────────── */
+  .brand {
+    background: linear-gradient(145deg, #2E3192 0%, #1E2170 100%);
+    overflow: hidden;
+    position: relative;
+  }
+  .brand-inner {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 0 20px;
+    position: relative;
+    z-index: 2;
+    height: 100%;
+  }
+  .brand-hex {
+    width: 38px;
+    height: 33px;
+    flex-shrink: 0;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,.2));
+  }
+  .brand-bg-hex {
+    position: absolute;
+    right: -30px;
+    top: -20px;
+    width: 140px;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .brand-text { line-height: 1; }
+  .brand-logo-v2 {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-size: 21px;
+    letter-spacing: 0.06em;
+    color: white;
+    line-height: 1;
+  }
+  .brand-sub-v2 {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,.55);
+    margin-top: 3px;
+    font-weight: 600;
+  }
+
+  /* ── Sidebar v2 ──────────────────────────────────────────── */
+  aside {
+    background: #FFFFFF;
+    border-right: 1px solid #ECEDF8;
+  }
+  .nav-group-hdr { border-left: 3px solid transparent; }
+  .nav-group.open > .nav-group-hdr {
+    border-left-color: var(--phar-navy);
+    background: var(--phar-navy-faint);
+  }
+  .nav-direct.active { border-left-color: var(--phar-navy); }
+  .nav-group.open > .nav-group-hdr .nav-gicon {
+    background: var(--phar-navy);
+    box-shadow: 0 2px 8px rgba(46,49,146,.35);
+  }
+  .nav-direct.active .nav-gicon {
+    background: var(--phar-navy);
+    box-shadow: 0 2px 8px rgba(46,49,146,.35);
+  }
+  .nav-sub-item.active {
+    background: var(--phar-navy-faint);
+    border-left-color: var(--phar-navy);
+    color: var(--phar-navy);
+  }
+  .nav-footer {
+    border-top: 1px solid var(--phar-navy-pale);
+    margin-top: auto;
+  }
+
+  /* ── Header v2 ───────────────────────────────────────────── */
+  header {
+    background: #FFFFFF;
+    border-bottom: 1px solid #ECEDF8;
+  }
+  .breadcrumb-current { color: var(--phar-navy); }
+
+  /* ── Hexagon shape utility ───────────────────────────────── */
+  .hex-shape {
+    clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+  }
+
+  /* ── KPI cards v2 ────────────────────────────────────────── */
+  .kpi-corner {
+    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+    width: 48px; height: 42px;
+    top: -4px; right: -4px;
+    opacity: 0.06;
+  }
+  .kpi:hover { box-shadow: 0 4px 16px rgba(46,49,146,.1); }
+  .kpi-primary { background: linear-gradient(135deg, var(--phar-navy) 0%, var(--phar-navy-dark) 100%); }
+  .kpi-primary .kpi-corner { opacity: 0.1; }
+
+  /* ── Module title bar ────────────────────────────────────── */
+  .module-title-wrap::before {
+    background: linear-gradient(180deg, var(--phar-navy) 0%, var(--phar-navy-light) 100%);
+    border-radius: 2px;
+  }
+  .module-kicker { color: var(--phar-navy); }
+
+  /* ── Section bar numbers → hexagone ─────────────────────── */
+  .section-bar-num {
+    clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+    border-radius: 0;
+    width: 34px; height: 30px;
+    background: var(--phar-navy);
+  }
+
+  /* ── Data table headers ──────────────────────────────────── */
+  .data-table thead th {
+    background: linear-gradient(90deg, var(--phar-navy) 0%, var(--phar-navy-light) 100%);
+    letter-spacing: 0.08em;
+  }
+  table.inv-table thead th { background: var(--phar-navy); }
+  table.inv-table thead th.pos-col { background: var(--phar-navy-dark); }
+  table.inv-table thead th.total-col { background: var(--phar-navy-light); }
+
+  /* ── Buttons v2 ──────────────────────────────────────────── */
+  .btn-primary {
+    background: var(--phar-navy);
+    border-color: var(--phar-navy);
+    box-shadow: 0 2px 6px rgba(46,49,146,.25);
+  }
+  .btn-primary:hover {
+    background: var(--phar-navy-dark);
+    border-color: var(--phar-navy-dark);
+    box-shadow: 0 4px 12px rgba(46,49,146,.35);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active { transform: translateY(0); }
+
+  /* ── Cards v2 ────────────────────────────────────────────── */
+  .card-header {
+    background: #FAFBFF;
+    border-bottom: 1px solid var(--phar-navy-pale);
+  }
+  .card { border-color: #E8E9F5; }
+  .card:hover { border-color: #D0D2EF; }
+
+  /* ── Upload zone ─────────────────────────────────────────── */
+  .upload-icon { background: var(--phar-navy-faint); }
+  .upload-zone:hover {
+    border-color: var(--phar-navy);
+    background: var(--phar-navy-faint);
+  }
+
+  /* ── Empty state icon → hexagone ─────────────────────────── */
+  .empty-icon {
+    clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+    border-radius: 0;
+    background: var(--phar-navy);
+    width: 60px; height: 52px;
+  }
+
+  /* ── Ratio & progress bars ───────────────────────────────── */
+  .ratio-fill { background: var(--phar-navy); }
+  .ratio-block { background: #FAFBFF; border-color: var(--phar-navy-pale); }
+
+  /* ── Mercuriale tabs ─────────────────────────────────────── */
+  .mercuriale-tab.active {
+    background: var(--phar-navy);
+    color: white;
+    border-color: var(--phar-navy);
+    box-shadow: 0 2px 6px rgba(46,49,146,.2);
+  }
+
+  /* ── Status bar ──────────────────────────────────────────── */
+  .status-bar {
+    background: linear-gradient(90deg, var(--phar-navy-dark) 0%, var(--phar-navy) 100%);
+  }
+
+  /* ── Scan log ────────────────────────────────────────────── */
+  .scan-log { background: #0F1040; }
+
+  /* ── API bar ─────────────────────────────────────────────── */
+  .api-bar {
+    background: linear-gradient(90deg, var(--phar-navy-faint) 0%, white 100%);
+    border-bottom: 1px solid var(--phar-navy-pale);
+  }
+  .api-bar.connected {
+    background: linear-gradient(90deg, var(--success-light) 0%, white 100%);
+  }
+
+  /* ── Sidebar footer divider ──────────────────────────────── */
+  .nav-divider { background: var(--phar-navy-pale); }
+
+  /* ── Focus states ─────────────────────────────────────────── */
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--phar-navy);
+    box-shadow: 0 0 0 3px rgba(46,49,146,.12);
+  }
+
+  /* ── Scrollbar custom ────────────────────────────────────── */
+  aside::-webkit-scrollbar { width: 4px; }
+  aside::-webkit-scrollbar-track { background: transparent; }
+  aside::-webkit-scrollbar-thumb { background: var(--phar-navy-pale); border-radius: 2px; }
+
+  /* ── Hexagon watermark on brand (desktop only) ────────────── */
+  @media (min-width: 801px) {
+    .brand::after {
+      content: '';
+      position: absolute;
+      bottom: -18px; left: -18px;
+      width: 80px; height: 70px;
+      clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+      background: white;
+      opacity: .04;
+      pointer-events: none;
+    }
+  }
+
+  /* ── Module header badge ─────────────────────────────────── */
+  .module-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--phar-navy);
+    margin-bottom: 8px;
+  }
+  .module-kicker::before {
+    content: '';
+    display: inline-block;
+    width: 14px; height: 12px;
+    clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+    background: var(--phar-navy);
+    opacity: .5;
+  }
+
+  /* ── Alert: left border = brand color ────────────────────── */
+  .alert.info { border-left-color: var(--phar-navy); }
+  .alert.info .alert-icon { background: var(--phar-navy-faint); color: var(--phar-navy); }
+  .alert.info .alert-title { color: var(--phar-navy); }
+
+  /* ── Badge info = brand color ────────────────────────────── */
+  .badge-info { background: var(--phar-navy-faint); color: var(--phar-navy); }
+
+  /* ── Subtabs ─────────────────────────────────────────────── */
+  .subtab.active {
+    color: var(--phar-navy);
+    border-bottom-color: var(--phar-navy);
+  }
+
+  /* ── Article editor panel ────────────────────────────────── */
+  #article-editor-panel .modal-close,
+  #article-editor-panel button[onclick="closeArticleEditor()"] {
+    border-color: var(--gray-200);
+  }
+
+  /* ── Establishment chip v2 ───────────────────────────────── */
+  .establishment {
+    background: var(--phar-navy-faint);
+    color: var(--phar-navy);
+    border: 1px solid var(--phar-navy-pale);
+    border-radius: var(--radius);
+    font-weight: 700;
+  }
+  .establishment:hover { background: var(--phar-navy-pale); }
+  .establishment::before { background: var(--phar-navy); }
+
+  /* ── Inventory filter chips ──────────────────────────────── */
+  .inv-filter-chip.active {
+    background: var(--phar-navy);
+    border-color: var(--phar-navy);
+    color: white;
+    box-shadow: 0 2px 6px rgba(46,49,146,.2);
+  }
+
+  /* ── Segment active ──────────────────────────────────────── */
+  .segment-btn.active { color: var(--phar-navy); }
+
+  /* ── Recon ecart boxes ───────────────────────────────────── */
+  .recon-ecart.ok   { border-color: var(--success); }
+  .recon-title { color: var(--phar-navy); }
+
+  /* ── POS legend dot ──────────────────────────────────────── */
+  .pos-legend-dot {
+    clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+    border-radius: 0;
+    width: 10px; height: 9px;
+  }
+
+  /* ── User avatar → hexagone ──────────────────────────────── */
+  .user-avatar {
+    clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+    border-radius: 0;
+    background: var(--phar-navy);
+    box-shadow: 0 2px 6px rgba(46,49,146,.3);
+  }
+
+  /* ── Modal title underline accent ────────────────────────── */
+  .modal-title {
+    position: relative;
+    padding-bottom: 2px;
+  }
+  .modal-header {
+    border-bottom: 2px solid var(--phar-navy-pale);
+  }
+
+  /* ── Notification dot ────────────────────────────────────── */
+  .notif-dot { background: #E94B5A; }
+
+  /* ── Scan result header ──────────────────────────────────── */
+  .scan-result-header {
+    background: linear-gradient(90deg, var(--phar-navy-faint) 0%, white 100%);
+    border-bottom: 1px solid var(--phar-navy-pale);
+  }
+  .scan-result-header h3 { color: var(--phar-navy); }
+
+  /* ── Supplier card loaded ────────────────────────────────── */
+  .supplier-card.loaded {
+    border-color: var(--phar-navy);
+    background: var(--phar-navy-faint);
+  }
+
+  /* ── Flash cost ratio fill ───────────────────────────────── */
+  #fc-ratio-fill, #ratio-fill { background: var(--phar-navy); }
+
+  /* ── Radio card selected ─────────────────────────────────── */
+  .radio-card.selected { border-color: var(--phar-navy); background: var(--phar-navy-faint); }
+  .radio-card.selected .radio-card-dot { border-color: var(--phar-navy); }
+  .radio-card.selected .radio-card-dot::after { background: var(--phar-navy); }
+
+  /* ── Print: logo header ──────────────────────────────────── */
+  @media print {
+    .print-header { border-bottom-color: var(--phar-navy) !important; }
+  }
+
+  /* ── Hexagon accent on KPI primary ──────────────────────── */
+  .kpi-primary::before {
+    content: '';
+    position: absolute;
+    top: 12px; right: 12px;
+    width: 22px; height: 19px;
+    clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+    background: white;
+    opacity: .1;
+  }
+
+  /* ── Page load animation ─────────────────────────────────── */
+  .module.active { animation: fadeInUp .2s ease both; }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
   /* ===== TOAST ===== */
   #toast-container { position: fixed; bottom: 56px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
   .toast { background: var(--gray-900); color: var(--white); padding: 12px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; box-shadow: 0 4px 16px rgba(0,0,0,0.2); animation: slideToast 0.25s ease; max-width: 360px; }
@@ -1637,10 +1998,24 @@
 
   <!-- ===== BRAND BLOCK ===== -->
   <div class="brand">
-    <div>
-      <div class="brand-logo">PHAR<span class="brand-logo-dot">.</span></div>
-      <div class="brand-sub">Cost Control</div>
+    <!-- Hexagone PHAR + wordmark -->
+    <div class="brand-inner">
+      <svg class="brand-hex" viewBox="0 0 110 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <!-- Hexagone flat-top -->
+        <polygon points="27.5,2 82.5,2 110,48 82.5,94 27.5,94 0,48" fill="white" opacity="0.15"/>
+        <polygon points="27.5,2 82.5,2 110,48 82.5,94 27.5,94 0,48" fill="none" stroke="white" stroke-width="1.5" opacity="0.3"/>
+        <!-- Flèche blanche intérieure -->
+        <polygon points="24,76 24,22 72,46" fill="white"/>
+      </svg>
+      <div class="brand-text">
+        <div class="brand-logo-v2">PHAR</div>
+        <div class="brand-sub-v2">Cost Control</div>
+      </div>
     </div>
+    <!-- Hexagone décoratif fond -->
+    <svg class="brand-bg-hex" viewBox="0 0 200 174" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <polygon points="50,4 150,4 200,87 150,170 50,170 0,87" fill="white" opacity="0.04"/>
+    </svg>
   </div>
 
   <!-- ===== HEADER ===== -->
@@ -2200,6 +2575,24 @@
               <div class="upload-title" id="bl-upload-title">Déposer un ou plusieurs fichiers ici</div>
               <div class="upload-hint" id="bl-upload-hint">ou cliquer pour parcourir vos documents</div>
             </div>
+            <!-- Bouton import PHAR Marketplace -->
+            <div style="margin-top:14px;padding:14px 16px;background:var(--phar-navy-faint);border-radius:var(--radius-lg);border:1px solid var(--phar-navy-pale);display:flex;align-items:center;justify-content:space-between;gap:16px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <svg width="28" height="24" viewBox="0 0 110 96" style="flex-shrink:0;">
+                  <polygon points="27.5,2 82.5,2 110,48 82.5,94 27.5,94 0,48" fill="var(--phar-navy)"/>
+                  <polygon points="24,76 24,22 72,46" fill="white"/>
+                </svg>
+                <div>
+                  <div style="font-size:13px;font-weight:700;color:var(--phar-navy);">PHAR Marketplace</div>
+                  <div style="font-size:11px;color:var(--gray-500);">Import direct depuis l'export Excel "Livraisons" de la marketplace · format reconnu automatiquement</div>
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="importPHARMarketplace()" style="white-space:nowrap;flex-shrink:0;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                Importer depuis PHAR Marketplace
+              </button>
+            </div>
+
             <div class="row" style="margin-top:16px;justify-content:space-between;align-items:center;">
               <div style="font-size:12px;color:var(--gray-500);" id="bl-file-info">Aucun fichier sélectionné</div>
               <button class="btn btn-primary" id="bl-scan-btn" onclick="scanBL()" disabled>
@@ -3993,6 +4386,7 @@ function persistScannedBL(parsed, fichier) {
     statut: 'a_rapprocher',     // a_rapprocher | integre_stock | rapproche
     integre_stock: false,
     facture_id: null,
+    source: parsed.source || 'claude_scan',  // 'phar_marketplace' | 'claude_scan'
     raw: parsed
   };
   pharBLs.unshift(bl);
@@ -4564,7 +4958,15 @@ function renderBLRepository() {
           return `<tr>
             <td class="bl-check-col"><input type="checkbox" class="bl-check" ${_blSelection.has(bl.id) ? 'checked' : ''} onchange="toggleBLSelect('${bl.id}', this.checked)"></td>
             <td>${bl.date || '—'}</td>
-            <td><strong>${bl.fournisseur || '—'}</strong></td>
+            <td>
+              <strong>${bl.fournisseur || '—'}</strong>
+              ${bl.source === 'phar_marketplace'
+                ? `<span style="margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.06em;
+                     color:var(--phar-navy);background:var(--phar-navy-faint);
+                     border:1px solid var(--phar-navy-pale);padding:1px 5px;border-radius:3px;">
+                     MARKETPLACE</span>`
+                : ''}
+            </td>
             <td>${bl.numero || '—'}</td>
             <td class="num">${bl.articles ? bl.articles.length : 0}</td>
             <td class="num">${(bl.total_ht || 0).toFixed(2)}</td>

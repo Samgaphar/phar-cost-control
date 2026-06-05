@@ -482,7 +482,7 @@ function _aeRender() {
   if (!panel || !_aeArticle) return;
 
   const cat = _aeArticle._ac_cat || _aeArticle.categorie || (typeof fcAutoCategory === 'function' ? fcAutoCategory(_aeArticle.article) : 'Autres');
-  const catOpts = (typeof FC_CATEGORIES !== 'undefined' ? FC_CATEGORIES : ['Autres']).map(c =>
+  const catOpts = (typeof getAllCategories === 'function' ? getAllCategories() : FC_CATEGORIES || ['Autres']).map(c =>
     `<option value="${c}" ${c===cat?'selected':''}>${c}</option>`).join('');
 
   document.getElementById('ae-name-display').textContent  = _aeArticle.article || 'Nouvel article';
@@ -1211,7 +1211,7 @@ function _impBuildMapping() {
     if (v) rawCats.add(v);
   });
 
-  const catOpts = (typeof FC_CATEGORIES !== 'undefined' ? FC_CATEGORIES : ['Autres']).map(c =>
+  const catOpts = (typeof getAllCategories === 'function' ? getAllCategories() : FC_CATEGORIES || ['Autres']).map(c =>
     `<option value="${c}">${c}</option>`).join('');
 
   const rows = [...rawCats].sort().map(raw => {

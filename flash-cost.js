@@ -44,6 +44,44 @@ const FC_CAT_KW = {
   'Nettoyage':             ['detergent','nettoyant','desinfectant','savon','lessive','eponge','torchon']
 };
 
+/* ─── Catégories personnalisées ──────────────────────────────── */
+const FC_CUSTOM_CATS_KEY = 'phar_custom_categories_v1';
+
+function loadCustomCategories() {
+  try { return JSON.parse(localStorage.getItem(FC_CUSTOM_CATS_KEY)) || []; }
+  catch(e) { return []; }
+}
+function saveCustomCategories(cats) {
+  try { localStorage.setItem(FC_CUSTOM_CATS_KEY, JSON.stringify(cats)); } catch(e) {}
+}
+
+/** Toutes les catégories (système + personnalisées) */
+function getAllCategories() {
+  const custom = loadCustomCategories();
+  return [...FC_CATEGORIES, ...custom].filter((v,i,a) => a.indexOf(v) === i);
+}
+
+/** Ajouter une catégorie personnalisée */
+function addCustomCategory(name) {
+  name = name.trim();
+  if (!name) return;
+  const custom = loadCustomCategories();
+  if (getAllCategories().map(c=>c.toLowerCase()).includes(name.toLowerCase())) {
+    if (typeof showToast === 'function') showToast('Cette catégorie existe déjà.', 'error');
+    return false;
+  }
+  custom.push(name);
+  saveCustomCategories(custom);
+  if (typeof showToast === 'function') showToast(`✓ Catégorie "${name}" créée`, 'success');
+  return true;
+}
+
+function deleteCustomCategory(name) {
+  let custom = loadCustomCategories();
+  custom = custom.filter(c => c !== name);
+  saveCustomCategories(custom);
+}
+
 /** Détecte automatiquement la catégorie d'un article */
 function fcAutoCategory(text) {
   if (!text) return 'Autres';
@@ -2136,6 +2174,373 @@ function _fcInjectAnalyticsModal() {
   });
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   PHAR MARKETPLACE — Importeur Excel de bons de livraison
+   Format détecté sur export "Livraisons" de la marketplace PHAR
+   ═══════════════════════════════════════════════════════════════
+
+   Structure du fichier :
+   Ligne 1  : No de client      | [id]
+   Ligne 2  : Adresse           | [nom entreprise]
+   Ligne 3  :                   | [adresse]
+   Ligne 4  :                   | [NPA ville]
+   Ligne 5  : E-mail            | [email]
+   Ligne 6  : Date de commande  | [date + heure]
+   Ligne 7  : Numéro de commande| [numéro] ← identifiant unique
+   Ligne 8  : Date de livraison | [date livraison]
+   Ligne 9  : Référence         | [ref optionnelle]
+   ...      : vide
+   Ligne 12 : N° art. | Désignation | Quantité | Unité de livraison | Fournisseur | Prix de base | Montant
+   Ligne 13+: [articles]
+   Dernière : Total | | | | | | [total]
+   ─────────────────────────────────────────────────────────────── */
+
+const MOIS_FR = {
+  'jan':1,'fév':2,'fev':2,'mar':3,'avr':4,'mai':5,'juin':6,
+  'jui':6,'jul':7,'aoû':8,'aou':8,'sep':9,'oct':10,'nov':11,'déc':12,'dec':12
+};
+
+/** "21 mai 26" ou "21 mai 26, 13:44:01" → "21.05.2026" */
+function _pharMktDate(str) {
+  if (!str) return '—';
+  const m = String(str).match(/(\d{1,2})\s+([a-záéèêëûüàâ]+)\.?\s+(\d{2,4})/i);
+  if (!m) return String(str).split(',')[0].trim();
+  const day   = m[1].padStart(2, '0');
+  const mKey  = m[2].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').slice(0,3);
+  const mNum  = String(MOIS_FR[mKey] || 1).padStart(2, '0');
+  const year  = m[3].length === 2 ? '20' + m[3] : m[3];
+  return `${day}.${mNum}.${year}`;
+}
+
+/** Parse le nombre au format FR (virgule décimale) */
+function _pharNum(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  return parseFloat(String(val).replace(/\s/g,'').replace(',','.')) || 0;
+}
+
+/** Détermine si un classeur Excel est un export PHAR Marketplace */
+function _isPHARMarketplace(rows) {
+  if (!rows || rows.length < 12) return false;
+  // Cherche "Numéro de commande" dans les 10 premières lignes
+  const hasCmd = rows.slice(0, 10).some(r =>
+    String(r[0] || '').toLowerCase().includes('numéro de commande') ||
+    String(r[0] || '').toLowerCase().includes('numero de commande')
+  );
+  // Cherche la ligne d'en-têtes avec "N° art." ou "Désignation"
+  const hasHeader = rows.some(r =>
+    (String(r[0] || '').trim() === 'N° art.' || String(r[1] || '').trim() === 'Désignation')
+  );
+  return hasCmd && hasHeader;
+}
+
+/** Parse un classeur PHAR Marketplace et retourne un objet BL */
+function _parsePHARMarketplace(rows, fileName) {
+  // ── 1. En-têtes ──────────────────────────────────────────────
+  let orderNum = '', orderDate = '', deliveryDate = '', clientRef = '';
+  let headerRowIdx = -1;
+
+  rows.forEach((row, idx) => {
+    const a = String(row[0] || '').trim();
+    const b = String(row[1] || '').trim();
+    if (/numéro de commande/i.test(a) || /numero de commande/i.test(a)) orderNum = b;
+    if (/date de commande/i.test(a))  orderDate    = _pharMktDate(b);
+    if (/date de livraison/i.test(a)) deliveryDate = _pharMktDate(b);
+    if (/référence/i.test(a))         clientRef    = b;
+    // Détecte la ligne d'en-têtes des colonnes
+    if (String(row[0]||'').trim() === 'N° art.' || String(row[1]||'').trim() === 'Désignation') {
+      headerRowIdx = idx;
+    }
+  });
+
+  // ── 2. Articles ───────────────────────────────────────────────
+  const articles = [];
+  let totalHT = 0;
+
+  if (headerRowIdx >= 0) {
+    for (let i = headerRowIdx + 1; i < rows.length; i++) {
+      const row = rows[i];
+      const artNo = String(row[0] || '').trim();
+
+      // Stop à la ligne Total ou vide
+      if (!artNo) continue;
+      if (/^total$/i.test(artNo)) {
+        // Récupère le total de la ligne Total (col G = index 6)
+        const tot = _pharNum(row[6]);
+        if (tot > 0) totalHT = tot;
+        break;
+      }
+
+      const designation = String(row[1] || '').trim();
+      if (!designation) continue;
+
+      const quantite  = _pharNum(row[2]) || 1;
+      const uniteCmd  = String(row[3] || '').trim();  // "UV à 960 STK"
+      const fournLine = String(row[4] || '').trim();  // Fournisseur ligne
+      const prixBase  = _pharNum(row[5]);             // Prix par pièce individuelle
+      const montant   = _pharNum(row[6]);             // Total ligne (prix × nb pièces dans l'UV)
+
+      // Prix unitaire par UV commandé (= montant / quantite)
+      const prixParUV = quantite > 0 ? montant / quantite : prixBase;
+
+      // Extraire le nombre de pièces par UV s'il est dans l'unité
+      // Ex: "UV à 960 STK" → 960 pièces, prixBase = prix/pièce
+      const unitsMatch = uniteCmd.match(/à\s*(\d+(?:[.,]\d+)?)\s*stk/i);
+      const unitsPerUV = unitsMatch ? _pharNum(unitsMatch[1]) : null;
+
+      const cat = typeof fcAutoCategory === 'function' ? fcAutoCategory(designation) : 'Autres';
+      const tva = typeof fcAutoTVA === 'function' ? fcAutoTVA(designation, cat) : 2.6;
+
+      articles.push({
+        ref:              artNo,
+        designation,
+        quantite,
+        unite:            uniteCmd || 'UV',
+        prix_unitaire_ht: prixParUV,   // Prix par UV commandé
+        prix_base_piece:  prixBase,    // Prix par pièce individuelle
+        units_per_uv:     unitsPerUV,  // Nb pièces dans l'UV (null si inconnu)
+        total_ht:         montant,
+        tva_pct:          tva,
+        categorie_suggeree: cat,
+        fournisseur_ligne:  fournLine  // Fournisseur réel via marketplace
+      });
+
+      if (totalHT === 0) totalHT += montant;
+    }
+  }
+
+  // Total TVA estimé par ligne
+  const totalTVA = articles.reduce((s, a) =>
+    s + (a.total_ht * (a.tva_pct / 100)), 0);
+  const totalTTC = totalHT + totalTVA;
+
+  return {
+    type_document:  'bon_livraison',
+    fichier:        fileName,
+    fournisseur:    'PHAR Marketplace',
+    numero:         orderNum,
+    date:           deliveryDate || orderDate,
+    date_commande:  orderDate,
+    client:         'PHAR SA',
+    reference:      clientRef,
+    articles,
+    total_ht:       totalHT,
+    total_tva:      parseFloat(totalTVA.toFixed(2)),
+    total_ttc:      parseFloat(totalTTC.toFixed(2)),
+    devise:         'CHF',
+    notes:          clientRef ? `Référence : ${clientRef}` : '',
+    source:         'phar_marketplace'  // flag pour identifier l'origine
+  };
+}
+
+/** Lance l'import PHAR Marketplace depuis un Excel */
+function importPHARMarketplace() {
+  const input = document.createElement('input');
+  input.type    = 'file';
+  input.accept  = '.xlsx,.xls';
+  input.multiple = true;
+
+  input.onchange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    // S'assurer qu'on est sur l'onglet scan
+    if (typeof switchAchatsTab === 'function') switchAchatsTab('scan');
+
+    // Naviguer vers fc-bons si besoin
+    if (typeof _navActivateModule === 'function') {
+      const navItem = document.querySelector('.nav-sub-item[data-module="fc-bons"][data-tab="scan"]');
+      if (typeof _navSetActive === 'function') _navSetActive(navItem);
+      if (typeof navOpenGroup === 'function') navOpenGroup('achats');
+      _navActivateModule('fc-bons', 'scan');
+    }
+
+    if (typeof clearBLLog === 'function') {
+      clearBLLog();
+      document.getElementById('bl-scan-results').innerHTML = '';
+    }
+    if (typeof blLog === 'function')
+      blLog(`Import PHAR Marketplace · ${files.length} fichier(s)`, 'step');
+
+    let ok = 0, fail = 0;
+
+    for (const file of files) {
+      if (typeof blLog === 'function')
+        blLog(`— ${file.name} (${(file.size/1024).toFixed(0)} Ko)…`, 'step');
+      try {
+        const buf  = await file.arrayBuffer();
+        const wb   = XLSX.read(buf, { type:'array' });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+
+        if (!_isPHARMarketplace(rows)) {
+          if (typeof blLog === 'function')
+            blLog(`  ✗ Format non reconnu — ce fichier ne semble pas être un export PHAR Marketplace.`, 'err');
+          // Essaie quand même de scanner via Claude si clé dispo
+          if (typeof blLog === 'function')
+            blLog(`  → Essayez le scan Claude AI pour ce document.`, 'info');
+          fail++;
+          continue;
+        }
+
+        const parsed = _parsePHARMarketplace(rows, file.name);
+        if (typeof blLog === 'function')
+          blLog(`  ✓ ${parsed.articles.length} article(s) · N° ${parsed.numero} · ${parsed.date} · ${parsed.total_ht.toFixed(2)} CHF HT`, 'ok');
+
+        // Persiste dans pharBLs (réutilise la logique existante)
+        if (typeof persistScannedBL === 'function') {
+          persistScannedBL(parsed, file.name);
+        }
+        // Affiche la carte résultat enrichie
+        _renderPHARMarketplaceCard(parsed);
+        ok++;
+      } catch (err) {
+        if (typeof blLog === 'function')
+          blLog(`  ✗ ${file.name} : ${err.message}`, 'err');
+        fail++;
+      }
+    }
+
+    if (typeof blLog === 'function')
+      blLog(`Terminé · ${ok} importé(s)${fail ? ` · ${fail} échec(s)` : ''}`, ok ? 'ok' : 'err');
+    if (ok && typeof renderBLRepository === 'function') renderBLRepository();
+    if (ok && typeof showToast === 'function')
+      showToast(`✓ ${ok} commande(s) PHAR Marketplace importée(s)`, 'success');
+    document.querySelector('main')?.scrollTo({ top: 0, behavior:'smooth' });
+  };
+
+  input.click();
+}
+
+/** Carte résultat enrichie pour PHAR Marketplace */
+function _renderPHARMarketplaceCard(parsed) {
+  const container = document.getElementById('bl-scan-results');
+  if (!container) return;
+
+  const rows = (parsed.articles || []).map((a, idx) => {
+    const tva     = a.tva_pct || 2.6;
+    const totTTC  = a.total_ht * (1 + tva / 100);
+    const catOpts = (typeof getAllCategories === 'function' ? getAllCategories() : ['Autres']).map(c =>
+      `<option value="${c}" ${c === a.categorie_suggeree ? 'selected' : ''}>${c}</option>`
+    ).join('');
+
+    // Infos unité enrichies
+    const uniteDetail = a.units_per_uv
+      ? `<div style="font-size:10px;color:var(--gray-400);margin-top:2px;">${a.units_per_uv} pcs · ${a.prix_base_piece?.toFixed(4)} CHF/pce</div>`
+      : '';
+
+    return `<tr id="phar-mkt-row-${idx}">
+      <td style="font-size:11px;color:var(--phar-navy);font-weight:700;font-family:monospace;">${a.ref}</td>
+      <td style="font-weight:600;max-width:200px;">
+        ${a.designation}
+        ${a.fournisseur_ligne && a.fournisseur_ligne !== 'PHAR Marketplace'
+          ? `<div style="font-size:10px;color:var(--gray-400);margin-top:1px;">via ${a.fournisseur_ligne}</div>`
+          : ''}
+      </td>
+      <td class="num">${a.quantite}</td>
+      <td>
+        <div style="font-size:12px;">${a.unite}</div>
+        ${uniteDetail}
+      </td>
+      <td class="num" style="font-weight:700;">${a.prix_unitaire_ht.toFixed(2)}</td>
+      <td class="num" style="font-weight:700;">${a.total_ht.toFixed(2)}</td>
+      <td style="text-align:center;">
+        <span class="badge ${tva > 3 ? 'badge-warning' : 'badge-success'}" style="font-size:10px;">${tva}%</span>
+      </td>
+      <td class="num" style="font-weight:700;color:var(--phar-navy);">${totTTC.toFixed(2)}</td>
+      <td>
+        <select style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:3px;"
+                onchange="_blUpdateArticleCat('${parsed.id || ''}',${idx},this.value)">
+          ${catOpts}
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const card = document.createElement('div');
+  card.className = 'scan-result-card';
+  card.style.marginBottom = '16px';
+  card.innerHTML = `
+    <div class="scan-result-header" style="background:linear-gradient(90deg,var(--phar-navy-faint),white);">
+      <div>
+        <h3 style="color:var(--phar-navy);">
+          <!-- Hexagone PHAR miniature -->
+          <svg width="16" height="14" viewBox="0 0 110 96" style="vertical-align:middle;margin-right:6px;">
+            <polygon points="27.5,2 82.5,2 110,48 82.5,94 27.5,94 0,48" fill="var(--phar-navy)"/>
+            <polygon points="24,76 24,22 72,46" fill="white"/>
+          </svg>
+          PHAR Marketplace · Commande ${parsed.numero}
+        </h3>
+        <div style="font-size:11px;color:var(--gray-500);margin-top:4px;">
+          Livraison : ${parsed.date} · Commandé le : ${parsed.date_commande}
+          ${parsed.reference ? ` · Réf. : ${parsed.reference}` : ''}
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openBLIntegrationModalFromBL('${parsed.id || ''}')">
+        Intégrer à l'inventaire
+      </button>
+    </div>
+
+    <!-- Méta -->
+    <div class="scan-meta-grid">
+      <div class="scan-meta-item"><div class="label">Fournisseur</div><div class="value">PHAR Marketplace</div></div>
+      <div class="scan-meta-item"><div class="label">N° commande</div><div class="value" style="font-family:monospace;">${parsed.numero}</div></div>
+      <div class="scan-meta-item"><div class="label">Date livraison</div><div class="value">${parsed.date}</div></div>
+      <div class="scan-meta-item">
+        <div class="label">Total TTC</div>
+        <div class="value" style="color:var(--phar-navy);font-family:'Archivo';font-weight:800;">${parsed.total_ttc.toFixed(2)} CHF</div>
+      </div>
+    </div>
+
+    <!-- Tableau articles -->
+    <div class="inv-table-scroll">
+      <table class="data-table" style="font-size:12px;">
+        <thead><tr>
+          <th>N° art.</th><th>Désignation</th>
+          <th class="num">Qté</th><th>Unité de livraison</th>
+          <th class="num">PU HT</th><th class="num">Total HT</th>
+          <th style="text-align:center;">TVA</th>
+          <th class="num">Total TTC</th>
+          <th>Catégorie</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr style="background:var(--phar-navy-pale);">
+            <td colspan="5" style="padding:10px 16px;font-weight:700;color:var(--phar-navy);">TOTAL</td>
+            <td class="num" style="font-weight:700;">${parsed.total_ht.toFixed(2)}</td>
+            <td style="text-align:center;font-size:11px;color:var(--gray-500);">TVA : ${parsed.total_tva.toFixed(2)}</td>
+            <td class="num" style="font-weight:800;font-family:'Archivo';font-size:14px;color:var(--phar-navy);">${parsed.total_ttc.toFixed(2)}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Note source -->
+    <div style="padding:8px 16px;background:var(--gray-50);border-top:1px solid var(--gray-200);
+         font-size:10px;color:var(--gray-400);display:flex;align-items:center;gap:6px;">
+      <svg width="12" height="10" viewBox="0 0 110 96">
+        <polygon points="27.5,2 82.5,2 110,48 82.5,94 27.5,94 0,48" fill="var(--phar-navy)" opacity=".5"/>
+        <polygon points="24,76 24,22 72,46" fill="white"/>
+      </svg>
+      Import automatique PHAR Marketplace · ${parsed.fichier}
+    </div>`;
+
+  container.appendChild(card);
+
+  // Mettre à jour l'ID du BL dans la carte maintenant qu'il est persisté
+  const bl = typeof pharBLs !== 'undefined'
+    ? pharBLs.find(b => b.numero === parsed.numero && b.source === 'phar_marketplace')
+    : null;
+  if (bl) {
+    card.querySelectorAll('[onclick*="openBLIntegrationModalFromBL"]').forEach(btn => {
+      btn.setAttribute('onclick', `openBLIntegrationModalFromBL('${bl.id}')`);
+    });
+    card.querySelectorAll('[onchange*="_blUpdateArticleCat"]').forEach(sel => {
+      sel.setAttribute('onchange', sel.getAttribute('onchange').replace("''", `'${bl.id}'`));
+    });
+  }
+}
+
 /* ─── Override renderScanResultCard : TVA + catégorie auto ──── */
 
 /**
@@ -2154,7 +2559,7 @@ window.renderScanResultCard = function(bl) {
       const qte       = parseFloat(a.quantite) || 0;
       const totalHT   = puHT * qte;
       const totalTTCl = totalHT * (1 + tva / 100);
-      const catOpts   = FC_CATEGORIES.map(c =>
+      const catOpts   = getAllCategories().map(c =>
         `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`
       ).join('');
       return `<tr id="bl-art-row-${bl.id}-${idx}">
@@ -2322,7 +2727,7 @@ function acRenderArticles() {
     const tva     = fcAutoTVA(a.article, cat);
     const cump    = a.cump != null ? a.cump : a.pu;
     const cumpDiff = Math.abs(cump - a.pu) > 0.01;
-    const catOpts = FC_CATEGORIES.map(c =>
+    const catOpts = getAllCategories().map(c =>
       `<option value="${c}" ${c===cat?'selected':''}>${c}</option>`).join('');
     return `<tr>
       <td style="font-weight:600;max-width:200px;">
@@ -2497,49 +2902,135 @@ function acRenderPrix() {
 function acRenderCategories() {
   const el = document.getElementById('ac-cat-content');
   if (!el) return;
-  const all   = acGetAllArticles();
-  const stats = {};
-  FC_CATEGORIES.forEach(c => { stats[c] = { nb:0, val:0 }; });
+  const all    = acGetAllArticles();
+  const custom = loadCustomCategories();
+  const allCats = getAllCategories();
+  const stats  = {};
+  allCats.forEach(c => { stats[c] = { nb:0 }; });
   all.forEach(a => {
     const c = a._ac_cat || fcAutoCategory(a.article);
-    if (!stats[c]) stats[c] = { nb:0, val:0 };
+    if (!stats[c]) stats[c] = { nb:0 };
     stats[c].nb++;
-    stats[c].val += a.pu;
   });
 
-  const rows = FC_CATEGORIES.map(c => {
+  const sysRows = FC_CATEGORIES.map(c => {
     const tva = FC_CAT_ALCOOL.has(c) ? 8.1 : 2.6;
     return `<tr>
       <td style="font-weight:600;">${c}</td>
       <td class="num">${stats[c]?.nb || 0}</td>
-      <td style="text-align:center;">
-        <span class="badge ${tva>3?'badge-warning':'badge-success'}">${tva}%</span>
-      </td>
+      <td style="text-align:center;"><span class="badge ${tva>3?'badge-warning':'badge-success'}">${tva}%</span></td>
+      <td style="text-align:center;"><span style="font-size:10px;color:var(--gray-400);">Système</span></td>
+      <td></td>
     </tr>`;
   }).join('');
 
+  const customRows = custom.length ? custom.map(c => {
+    const tva = fcAutoTVA(c, c);
+    return `<tr style="background:var(--phar-navy-faint);">
+      <td style="font-weight:600;">${c}</td>
+      <td class="num">${stats[c]?.nb || 0}</td>
+      <td style="text-align:center;"><span class="badge ${tva>3?'badge-warning':'badge-success'}">${tva}%</span></td>
+      <td style="text-align:center;"><span class="badge badge-info" style="font-size:10px;">Personnalisée</span></td>
+      <td style="text-align:right;">
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger);"
+                onclick="acDeleteCustomCat('${c.replace(/'/g,"\\'")}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('') : '';
+
   el.innerHTML = `
-    <div class="card" style="padding:0;max-width:600px;">
+    <!-- Créer une catégorie personnalisée -->
+    <div class="card" style="padding:0;max-width:700px;margin-bottom:20px;">
       <div class="card-header">
-        <div class="card-title">Catégories d'articles</div>
-        <div class="card-hint">TVA achat associée (2.6% F&B sans alcool · 8.1% alcool)</div>
+        <div class="card-title">Catégories personnalisées</div>
+        <div class="card-hint">Créez vos propres catégories : Bœuf, Porc, Surgelés, Produit asiatique…</div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+          <div style="flex:1;min-width:200px;">
+            <label class="field-label">Nom de la catégorie</label>
+            <input type="text" id="ac-new-cat-input" placeholder="Ex : Bœuf, Surgelés, Produit asiatique…"
+                   onkeydown="if(event.key==='Enter')acAddCustomCat()">
+          </div>
+          <div style="min-width:120px;">
+            <label class="field-label">TVA achat</label>
+            <select id="ac-new-cat-tva">
+              <option value="2.6">2.6% — Alimentaire</option>
+              <option value="8.1">8.1% — Alcool</option>
+              <option value="0">0% — Exonéré</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="acAddCustomCat()" style="margin-bottom:0;">
+            + Créer la catégorie
+          </button>
+        </div>
+        ${custom.length ? `
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--gray-200);">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);margin-bottom:8px;">
+            Catégories créées (${custom.length})
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            ${custom.map(c => `
+              <div style="display:inline-flex;align-items:center;gap:6px;
+                   background:var(--phar-navy-faint);border:1px solid var(--phar-navy-pale);
+                   border-radius:20px;padding:5px 12px 5px 14px;">
+                <span style="font-size:13px;font-weight:600;color:var(--phar-navy);">${c}</span>
+                <button onclick="acDeleteCustomCat('${c.replace(/'/g,"\\'")}');"
+                        style="background:none;border:none;cursor:pointer;color:var(--gray-400);
+                               padding:0;line-height:1;font-size:14px;transition:color .12s;"
+                        onmouseover="this.style.color='var(--danger)'"
+                        onmouseout="this.style.color='var(--gray-400)'">×</button>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+      </div>
+    </div>
+
+    <!-- Toutes les catégories -->
+    <div class="card" style="padding:0;max-width:700px;">
+      <div class="card-header">
+        <div class="card-title">Toutes les catégories</div>
+        <div class="card-hint">${allCats.length} catégories · ${custom.length} personnalisées</div>
       </div>
       <table class="data-table" style="font-size:13px;">
-        <thead><tr><th>Catégorie</th><th class="num">Articles</th><th style="text-align:center;">TVA achat</th></tr></thead>
-        <tbody>${rows}</tbody>
+        <thead><tr>
+          <th>Catégorie</th><th class="num">Articles</th>
+          <th style="text-align:center;">TVA achat</th>
+          <th style="text-align:center;">Type</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${sysRows}${customRows}</tbody>
       </table>
     </div>
-    <div class="alert info" style="margin-top:16px;max-width:600px;">
+
+    <div class="alert info" style="margin-top:16px;max-width:700px;">
       <div class="alert-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>
       <div class="alert-content">
-        <div class="alert-title">Règle TVA suisse — Achats F&B</div>
+        <div class="alert-title">Règle TVA Suisse — Achats F&B</div>
         <div class="alert-text">
-          <strong>2.6%</strong> — Alimentation, boissons sans alcool, café, thé (taux réduit)<br>
-          <strong>8.1%</strong> — Boissons alcoolisées : vins, bières, spiritueux, champagnes (taux normal)<br>
-          <strong>3.8%</strong> — Applicable uniquement en vente : prestations hôtelières (PDJ, chambres) — <em>pas sur les achats</em>
+          <strong>2.6%</strong> — Alimentation, boissons sans alcool, café, thé ·
+          <strong>8.1%</strong> — Alcool : vins, bières, spiritueux ·
+          <strong>3.8%</strong> — Ventes uniquement (PDJ / chambres) — jamais sur les achats
         </div>
       </div>
     </div>`;
+}
+
+function acAddCustomCat() {
+  const input = document.getElementById('ac-new-cat-input');
+  const name  = input?.value.trim();
+  if (!name) { if (typeof showToast === 'function') showToast('Saisissez un nom de catégorie.', 'error'); return; }
+  if (addCustomCategory(name)) {
+    if (input) input.value = '';
+    acRenderCategories();
+  }
+}
+
+function acDeleteCustomCat(name) {
+  if (!confirm(`Supprimer la catégorie "${name}" ?\nLes articles assignés ne seront pas modifiés.`)) return;
+  deleteCustomCategory(name);
+  acRenderCategories();
+  if (typeof showToast === 'function') showToast(`Catégorie "${name}" supprimée.`, '');
 }
 
 function acRenderFournisseurs() {
