@@ -1217,6 +1217,8 @@
   .achats-tabpane.active { display: block; }
   .ac-tabpane { display: none; }
   .ac-tabpane.active { display: block; }
+  .param-tabpane { display: none; }
+  .param-tabpane.active { display: block; }
   .bl-empty {
     padding: 48px 24px;
     text-align: center;
@@ -1775,6 +1777,24 @@
       </div>
     </div>
 
+    <!-- ── Paramètres ────────────────────────────────── -->
+    <div class="nav-group" id="navg-parametres">
+      <div class="nav-group-hdr" onclick="navToggleGroup('parametres')">
+        <div class="nav-gicon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+        </div>
+        <span class="nav-group-label">Paramètres</span>
+        <span class="nav-garrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
+      <div class="nav-sub-items">
+        <div class="nav-sub-label">Entreprise</div>
+        <div class="nav-sub-item" data-module="parametres" data-tab="entreprise">Entreprise</div>
+        <div class="nav-sub-label">Mon utilisateur</div>
+        <div class="nav-sub-item" data-module="parametres" data-tab="utilisateurs">Gérer les utilisateurs</div>
+        <div class="nav-sub-item" data-module="parametres" data-tab="mon-compte">Détails utilisateur</div>
+      </div>
+    </div>
+
     <div class="nav-footer">
       <strong style="color:var(--gray-700);">PHAR Cost v1.0</strong><br>
       Spreading care. Empowering business.
@@ -1970,6 +1990,37 @@
 
     </section>
 
+    <!-- PARAMÈTRES -->
+    <section class="module" id="module-parametres">
+
+      <div class="module-header">
+        <div>
+          <div class="module-title-wrap">
+            <div class="module-kicker">Configuration</div>
+            <h1 class="module-title">Paramètres</h1>
+            <p class="module-subtitle">Entreprise, utilisateurs, alertes et intégrations.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="subtab-bar">
+        <button class="subtab active" data-param-tab="entreprise"    onclick="switchParamTab('entreprise')">Entreprise</button>
+        <button class="subtab" data-param-tab="utilisateurs"  onclick="switchParamTab('utilisateurs')">Gérer les utilisateurs</button>
+        <button class="subtab" data-param-tab="mon-compte"    onclick="switchParamTab('mon-compte')">Mon compte</button>
+      </div>
+
+      <div class="param-tabpane active" id="param-pane-entreprise">
+        <div style="padding:48px;text-align:center;color:var(--gray-400);">Chargement…</div>
+      </div>
+      <div class="param-tabpane" id="param-pane-utilisateurs">
+        <div style="padding:48px;text-align:center;color:var(--gray-400);">Chargement…</div>
+      </div>
+      <div class="param-tabpane" id="param-pane-mon-compte">
+        <div style="padding:48px;text-align:center;color:var(--gray-400);">Chargement…</div>
+      </div>
+
+    </section>
+
     <!-- ARTICLES & CONFIGURATION -->
     <section class="module" id="module-articles-config">
 
@@ -1983,6 +2034,10 @@
         </div>
         <div class="module-actions">
           <button class="btn btn-outline btn-sm" onclick="acExport()">Exporter Excel</button>
+          <button class="btn btn-outline btn-sm" onclick="openArticleImport()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Importer depuis Excel
+          </button>
           <button class="btn btn-primary btn-sm" onclick="acNewArticle()">+ Nouvel article</button>
         </div>
       </div>
@@ -2820,6 +2875,7 @@ const MODULE_TITLES = {
   'fc-stock':        'Stock de clôture',
   'fc-calcul':       'Flash Cost',
   'fc-histo':        'Historique semaines',
+  parametres:        'Paramètres',
   inventaire:        'Inventaire',
   dashboard:         'Tableau de bord'
 };
@@ -2866,6 +2922,9 @@ document.querySelectorAll('.nav-sub-item[data-module]').forEach(item => {
     // Modules avec sous-onglets dédiés
     if (moduleId === 'articles-config' && tab && typeof switchACTab === 'function') {
       switchACTab(tab);
+    }
+    if (moduleId === 'parametres' && tab && typeof switchParamTab === 'function') {
+      switchParamTab(tab);
     }
   });
 });
@@ -4920,6 +4979,7 @@ document.querySelectorAll('#module-inventaire .btn').forEach(btn => {
 
 </script>
 <script src="flash-cost.js"></script>
+<script src="parametres.js"></script>
 
 </body>
 </html>

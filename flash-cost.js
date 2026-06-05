@@ -2365,7 +2365,9 @@ function acRenderArticles() {
         const sku = typeof getSkuForArticle==='function' ? getSkuForArticle(a.article) : null;
         return sku ? `<span style="font-family:monospace;font-size:10px;color:var(--phar-navy);background:var(--phar-navy-faint);padding:2px 6px;border-radius:3px;" title="${sku.ls_name||''}">${sku.ls_sku}</span>` : '<span style="color:var(--gray-300);font-size:11px;">—</span>';
       })()}</td>
-      <td style="text-align:right;">
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm"
+                onclick="typeof openArticleEditor==='function'&&openArticleEditor('${(a.article||'').replace(/'/g,"\\'")}','${a._merc}',false)">Modifier</button>
         <button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:4px 8px;"
                 onclick="acDeleteArticle('${a._merc}','${(a.article||'').replace(/'/g,"\\'")}')">✕</button>
       </td>
