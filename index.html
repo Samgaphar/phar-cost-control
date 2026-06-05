@@ -2046,12 +2046,14 @@
                      oninput="fcUpdateCA(this.value)" style="font-size:16px;font-weight:700;">
             </div>
             <div>
-              <label class="field-label">Semaine</label>
-              <input type="text" id="fc-semaine-label" readonly style="color:var(--gray-500);">
+              <label class="field-label">Du (début période)</label>
+              <input type="text" id="fc-date-debut" placeholder="JJ.MM.AAAA"
+                     oninput="fcUpdatePeriodLabel()" style="font-variant-numeric:tabular-nums;">
             </div>
             <div>
-              <label class="field-label">Période</label>
-              <input type="text" id="fc-periode-label" readonly style="color:var(--gray-500);">
+              <label class="field-label">Au (fin période)</label>
+              <input type="text" id="fc-date-fin" placeholder="JJ.MM.AAAA"
+                     oninput="fcUpdatePeriodLabel()" style="font-variant-numeric:tabular-nums;">
             </div>
           </div>
         </div>
@@ -2104,6 +2106,32 @@
           <div class="ratio-fill" id="fc-ratio-fill" style="width:0%;"></div>
         </div>
         <div class="ratio-scale"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+      </div>
+
+      <!-- Période consolidée sur plusieurs semaines -->
+      <div class="card" style="margin-top:20px;">
+        <div class="card-header">
+          <div class="card-title">Calcul sur une période personnalisée</div>
+          <div class="card-hint">Consolide plusieurs semaines archivées</div>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:flex-end;">
+            <div>
+              <label class="field-label">Semaine de début</label>
+              <select id="fc-consol-from" style="width:100%;" onchange="fcRenderConsolide()">
+                <option value="">— Sélectionner —</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label">Semaine de fin</label>
+              <select id="fc-consol-to" style="width:100%;" onchange="fcRenderConsolide()">
+                <option value="">— Sélectionner —</option>
+              </select>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="fcRenderConsolide()">Calculer</button>
+          </div>
+          <div id="fc-consol-result" style="margin-top:16px;"></div>
+        </div>
       </div>
 
       <!-- Top articles + Famille bars -->
@@ -2199,6 +2227,10 @@
         </div>
         <div class="module-actions">
           <button class="btn btn-outline btn-sm">Historique</button>
+          <button class="btn btn-outline btn-sm" onclick="fcOpenAnalytics()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+            Analyse & Export
+          </button>
           <button class="btn btn-outline btn-sm" onclick="importMercurialeExcel()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             Importer Excel

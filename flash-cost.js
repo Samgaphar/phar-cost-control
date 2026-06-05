@@ -270,6 +270,150 @@ function fcDeleteArticle(id) {
   if (typeof showToast === 'function') showToast('Article supprimé.', '');
 }
 
+/* ─── FC-4 : Mise à jour période manuelle ────────────────────── */
+function fcUpdatePeriodLabel() {
+  const debutEl = document.getElementById('fc-date-debut');
+  const finEl   = document.getElementById('fc-date-fin');
+  if (!fcSemaine || !debutEl || !finEl) return;
+  if (debutEl.value) fcSemaine.debut = debutEl.value.trim();
+  if (finEl.value)   fcSemaine.fin   = finEl.value.trim();
+  fcSaveAll();
+  renderFC4();
+}
+
+/* ─── FC-4 : Calcul consolidé multi-semaines ────────────────── */
+
+/** Remplit les selects de période à partir de l'historique */
+function fcPopulateConsolidePickers() {
+  const fromEl = document.getElementById('fc-consol-from');
+  const toEl   = document.getElementById('fc-consol-to');
+  if (!fromEl || !toEl) return;
+
+  const opts = ['<option value="">— Sélectionner —</option>',
+    ...fcHistorique.map(h =>
+      `<option value="${h.id}">${h.semaine} · ${h.debut} – ${h.fin}</option>`)
+  ].join('');
+
+  fromEl.innerHTML = opts;
+  toEl.innerHTML   = opts;
+
+  // Par défaut : toute la plage disponible
+  if (fcHistorique.length >= 2) {
+    fromEl.value = fcHistorique[fcHistorique.length - 1].id;
+    toEl.value   = fcHistorique[0].id;
+  }
+}
+
+/** Calcule et affiche le flash cost consolidé sur la plage sélectionnée */
+function fcRenderConsolide() {
+  const fromId = document.getElementById('fc-consol-from')?.value;
+  const toId   = document.getElementById('fc-consol-to')?.value;
+  const wrap   = document.getElementById('fc-consol-result');
+  if (!wrap) return;
+
+  if (!fromId || !toId) {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  // Trouver les indices dans l'historique (trié du plus récent au plus ancien)
+  const idxFrom = fcHistorique.findIndex(h => h.id === fromId);
+  const idxTo   = fcHistorique.findIndex(h => h.id === toId);
+  if (idxFrom < 0 || idxTo < 0) { wrap.innerHTML = ''; return; }
+
+  const iStart = Math.min(idxFrom, idxTo);
+  const iEnd   = Math.max(idxFrom, idxTo);
+  const slice  = fcHistorique.slice(iStart, iEnd + 1);
+
+  if (!slice.length) { wrap.innerHTML = ''; return; }
+
+  const totalCA    = slice.reduce((s, h) => s + h.ca_ht,      0);
+  const totalCout  = slice.reduce((s, h) => s + h.cout_total, 0);
+  const ratio      = totalCA > 0 ? (totalCout / totalCA * 100) : 0;
+  const nbSemaines = slice.length;
+  const periodeStr = `${slice[slice.length - 1].debut} → ${slice[0].fin}`;
+
+  // Agréger par famille sur toute la période
+  const parFamille = {};
+  slice.forEach(h => {
+    (h.detail || []).forEach(d => {
+      if (!parFamille[d.famille]) parFamille[d.famille] = 0;
+      parFamille[d.famille] += d.cout;
+    });
+  });
+
+  const ok    = ratio <= FC_TARGET_RATIO;
+  const delta = ratio - FC_TARGET_RATIO;
+
+  wrap.innerHTML = `
+    <div style="border-top:1px solid var(--gray-200);padding-top:16px;">
+      <div style="font-size:11px;color:var(--gray-500);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;">
+        Résultat · ${nbSemaines} semaine(s) · ${periodeStr}
+      </div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+        <div class="kpi kpi-primary" style="padding:14px;">
+          <div class="kpi-corner"></div>
+          <div class="kpi-label">CA période HT</div>
+          <div class="kpi-value" style="font-size:18px;">${fcFmt(totalCA)} <small>CHF</small></div>
+          <div class="kpi-foot">${nbSemaines} sem. · moy. ${fcFmt(totalCA/nbSemaines)}</div>
+        </div>
+        <div class="kpi" style="padding:14px;">
+          <div class="kpi-corner"></div>
+          <div class="kpi-label">Coût matière</div>
+          <div class="kpi-value" style="font-size:18px;">${fcFmt(totalCout)} <small>CHF</small></div>
+          <div class="kpi-foot">Moy. ${fcFmt(totalCout/nbSemaines)}/sem.</div>
+        </div>
+        <div class="kpi ${ok ? 'kpi-success' : delta <= 3 ? 'kpi-warning' : 'kpi-danger'}" style="padding:14px;">
+          <div class="kpi-corner"></div>
+          <div class="kpi-label">Ratio consolidé</div>
+          <div class="kpi-value" style="font-size:22px;">${fcFmtPct(ratio)}</div>
+          <div class="kpi-foot">Cible ${FC_TARGET_RATIO}% · écart ${delta >= 0 ? '+' : ''}${delta.toFixed(1)}pt</div>
+        </div>
+        <div class="kpi" style="padding:14px;">
+          <div class="kpi-corner"></div>
+          <div class="kpi-label">Semaines analysées</div>
+          <div class="kpi-value" style="font-size:22px;">${nbSemaines}</div>
+          <div class="kpi-foot">${slice[slice.length-1].semaine} → ${slice[0].semaine}</div>
+        </div>
+      </div>
+      ${Object.keys(parFamille).length ? `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${Object.entries(parFamille).sort((a,b)=>b[1]-a[1]).map(([f,v]) => `
+          <div style="flex:1;min-width:120px;padding:10px 14px;background:var(--phar-navy-faint);border-radius:var(--radius);border:1px solid var(--phar-navy-pale);">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--phar-navy);margin-bottom:3px;">${f}</div>
+            <div style="font-family:'Archivo';font-weight:700;font-size:14px;">${fcFmt(v)} CHF</div>
+            <div style="font-size:10px;color:var(--gray-500);">${totalCout > 0 ? ((v/totalCout)*100).toFixed(1) : '0.0'}% du coût</div>
+          </div>`).join('')}
+      </div>` : ''}
+      <div style="margin-top:12px;text-align:right;">
+        <button class="btn btn-outline btn-sm" onclick="fcExportConsolideExcel(${iStart},${iEnd})">
+          Exporter cette période (Excel)
+        </button>
+      </div>
+    </div>`;
+}
+
+function fcExportConsolideExcel(iStart, iEnd) {
+  if (typeof XLSX === 'undefined') return;
+  const slice = fcHistorique.slice(iStart, iEnd + 1);
+  const rows = [['Semaine','Période','CA HT (CHF)','Coût matière (CHF)','Ratio (%)']];
+  slice.forEach(h => rows.push([h.semaine, `${h.debut} – ${h.fin}`, h.ca_ht, h.cout_total, h.ratio]));
+  // Sous-détail par article
+  rows.push([]);
+  rows.push(['--- Détail par article ---']);
+  rows.push(['Semaine','Article','Famille','Consommation','Coût CHF','% CA']);
+  slice.forEach(h => {
+    (h.detail || []).forEach(d => {
+      rows.push([h.semaine, d.nom, d.famille, d.conso, d.cout, d.pct_ca]);
+    });
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Flash Cost période');
+  XLSX.writeFile(wb, `FlashCost_periode_${new Date().toISOString().slice(0,10)}.xlsx`);
+  if (typeof showToast === 'function') showToast('✓ Export Excel généré.', 'success');
+}
+
 /* ─── MODULE FC-2 : BL Cumul achats ─────────────────────────── */
 function renderFC2BLRapprochement() {
   const wrap = document.getElementById('fc-bl-rapprochement');
@@ -501,10 +645,11 @@ function renderFC4() {
   const caEl = document.getElementById('fc-ca-input');
   if (caEl && !caEl.matches(':focus')) caEl.value = fcSemaine.ca_ht || '';
 
-  const semEl = document.getElementById('fc-semaine-label');
-  const perEl = document.getElementById('fc-periode-label');
-  if (semEl) semEl.value = fcSemaine.semaine;
-  if (perEl) perEl.value = `${fcSemaine.debut} – ${fcSemaine.fin}`;
+  // Dates éditables
+  const debutEl = document.getElementById('fc-date-debut');
+  const finEl   = document.getElementById('fc-date-fin');
+  if (debutEl && !debutEl.matches(':focus')) debutEl.value = fcSemaine.debut || '';
+  if (finEl   && !finEl.matches(':focus'))   finEl.value   = fcSemaine.fin   || '';
 
   if (!calc) return;
 
@@ -755,6 +900,7 @@ function fcValiderSemaine() {
   renderFC4();
   renderFC3();
   renderFC5();
+  fcPopulateConsolidePickers();
 
   if (typeof showToast === 'function')
     showToast(`✓ Semaine ${entry.semaine} clôturée · ratio ${fcFmtPct(entry.ratio)}`, 'success');
@@ -1417,12 +1563,533 @@ function _fcDeleteFacture(id) {
   if (typeof showToast === 'function') showToast('Facture supprimée, BL remis en attente.', '');
 }
 
+/* ─── ANALYTICS : Analyse des entrées en stock ───────────────── */
+
+/**
+ * Ouvre le modal analytics et calcule les stats.
+ * Accessible depuis le module Inventaire et le journal des mouvements.
+ */
+function fcOpenAnalytics() {
+  const modal = document.getElementById('fc-analytics-modal');
+  if (!modal) return;
+  // Pré-remplir dates : 1er du mois courant → aujourd'hui
+  const now   = new Date();
+  const y     = now.getFullYear();
+  const m     = String(now.getMonth() + 1).padStart(2, '0');
+  const today = now.toLocaleDateString('fr-CH');
+  const first = `01.${m}.${y}`;
+  const fromEl = document.getElementById('fc-ana-from');
+  const toEl   = document.getElementById('fc-ana-to');
+  if (fromEl && !fromEl.value) fromEl.value = first;
+  if (toEl   && !toEl.value)   toEl.value   = today;
+  modal.classList.add('visible');
+  fcRunAnalytics();
+}
+
+/** Parse une date au format JJ.MM.AAAA → Date object */
+function _fcParseDate(str) {
+  if (!str) return null;
+  const p = str.split('.');
+  if (p.length !== 3) return null;
+  return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+}
+
+/** Retourne les mouvements dans la plage sélectionnée */
+function _fcFilterMouvements() {
+  const mvs = (typeof stockMovements !== 'undefined' ? stockMovements : []);
+  const fromStr = document.getElementById('fc-ana-from')?.value;
+  const toStr   = document.getElementById('fc-ana-to')?.value;
+  const merc    = document.getElementById('fc-ana-merc')?.value || 'all';
+  const search  = (document.getElementById('fc-ana-search')?.value || '').toLowerCase().trim();
+  const dFrom   = _fcParseDate(fromStr);
+  const dTo     = _fcParseDate(toStr);
+
+  return mvs.filter(mv => {
+    const d = _fcParseDate(mv.date);
+    if (dFrom && d && d < dFrom) return false;
+    if (dTo   && d && d > dTo)   return false;
+    if (merc !== 'all' && mv.mercuriale !== merc) return false;
+    if (search && !mv.article.toLowerCase().includes(search) &&
+        !(mv.fournisseur || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+}
+
+/** Lance le calcul d'analytics et rafraîchit l'affichage */
+function fcRunAnalytics() {
+  const groupBy = document.getElementById('fc-ana-group')?.value || 'article';
+  const mvs     = _fcFilterMouvements();
+
+  // KPIs globaux
+  const totalVal   = mvs.reduce((s, m) => s + m.quantite * m.prix_unitaire, 0);
+  const totalQteKg = mvs.reduce((s, m) => s + m.quantite, 0);
+  const nbArticles = new Set(mvs.map(m => m.article)).size;
+  const nbBL       = new Set(mvs.map(m => m.bl_numero).filter(Boolean)).size;
+
+  const kEl = document.getElementById('fc-ana-kpis');
+  if (kEl) kEl.innerHTML = `
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+      <div class="kpi kpi-primary" style="padding:14px;"><div class="kpi-corner"></div>
+        <div class="kpi-label">Valeur totale</div>
+        <div class="kpi-value" style="font-size:18px;">${fcFmt(totalVal)} <small>CHF</small></div>
+        <div class="kpi-foot">${mvs.length} mouvement(s)</div>
+      </div>
+      <div class="kpi" style="padding:14px;"><div class="kpi-corner"></div>
+        <div class="kpi-label">Articles distincts</div>
+        <div class="kpi-value" style="font-size:22px;">${nbArticles}</div>
+        <div class="kpi-foot">dans la période</div>
+      </div>
+      <div class="kpi" style="padding:14px;"><div class="kpi-corner"></div>
+        <div class="kpi-label">BL / livraisons</div>
+        <div class="kpi-value" style="font-size:22px;">${nbBL || mvs.length}</div>
+        <div class="kpi-foot">bulletins distincts</div>
+      </div>
+      <div class="kpi" style="padding:14px;"><div class="kpi-corner"></div>
+        <div class="kpi-label">Qté totale reçue</div>
+        <div class="kpi-value" style="font-size:18px;">${_fcFmtMontant(totalQteKg)}</div>
+        <div class="kpi-foot">toutes unités confondues</div>
+      </div>
+    </div>`;
+
+  if (groupBy === 'article')      _fcRenderAnalyticsByArticle(mvs);
+  else if (groupBy === 'mois')    _fcRenderAnalyticsByMonth(mvs);
+  else if (groupBy === 'fournisseur') _fcRenderAnalyticsByFournisseur(mvs);
+  else if (groupBy === 'pivot')   _fcRenderAnalyticsPivot(mvs);
+}
+
+/** Vue par article */
+function _fcRenderAnalyticsByArticle(mvs) {
+  const map = {};
+  mvs.forEach(m => {
+    if (!map[m.article]) map[m.article] = {
+      article: m.article, merc: m.mercuriale, fournisseur: m.fournisseur || '—',
+      unite: m.unite, nb: 0, qte: 0, valeur: 0,
+      prix_min: Infinity, prix_max: -Infinity,
+      dernier_prix: 0, derniere_date: ''
+    };
+    const r = map[m.article];
+    r.nb++;
+    r.qte    += m.quantite;
+    r.valeur += m.quantite * m.prix_unitaire;
+    r.prix_min = Math.min(r.prix_min, m.prix_unitaire);
+    r.prix_max = Math.max(r.prix_max, m.prix_unitaire);
+    if (!r.derniere_date || m.date > r.derniere_date) {
+      r.derniere_date  = m.date;
+      r.dernier_prix   = m.prix_unitaire;
+      r.fournisseur    = m.fournisseur || r.fournisseur;
+    }
+  });
+
+  const rows = Object.values(map).sort((a, b) => b.valeur - a.valeur);
+  if (!rows.length) {
+    document.getElementById('fc-ana-table').innerHTML =
+      '<div style="padding:32px;text-align:center;color:var(--gray-400);">Aucun mouvement dans cette période.</div>';
+    return;
+  }
+
+  const html = rows.map((r, i) => `
+    <tr>
+      <td style="color:var(--gray-400);font-size:11px;font-weight:700;">${i+1}</td>
+      <td style="font-weight:600;max-width:200px;">${r.article}</td>
+      <td><span class="badge ${r.merc === 'bev' ? 'badge-info' : 'badge-success'}">${r.merc === 'bev' ? 'Boissons' : 'Food'}</span></td>
+      <td style="font-size:12px;color:var(--gray-500);">${r.fournisseur}</td>
+      <td style="text-align:center;color:var(--gray-500);">${r.unite}</td>
+      <td class="num">${r.nb}</td>
+      <td class="num" style="font-weight:600;">${_fcFmtMontant(r.qte)}</td>
+      <td class="num" style="font-weight:700;color:var(--phar-navy);">${fcFmt(r.valeur)}</td>
+      <td class="num" style="font-size:11px;">${fcFmt(r.prix_min)}</td>
+      <td class="num" style="font-size:11px;">${fcFmt(r.prix_max)}</td>
+      <td class="num" style="font-weight:700;color:${r.dernier_prix > r.prix_min * 1.1 ? 'var(--danger)' : 'var(--gray-900)'};">
+        ${fcFmt(r.dernier_prix)}
+      </td>
+      <td style="font-size:11px;color:var(--gray-500);">${r.derniere_date}</td>
+    </tr>`).join('');
+
+  document.getElementById('fc-ana-table').innerHTML = `
+    <div class="inv-table-scroll">
+      <table class="data-table" style="font-size:12px;">
+        <thead><tr>
+          <th>#</th><th>Article</th><th>Merc.</th><th>Fournisseur</th><th style="text-align:center;">Unité</th>
+          <th class="num">Livraisons</th><th class="num">Qté totale</th>
+          <th class="num">Valeur CHF</th>
+          <th class="num">Prix min</th><th class="num">Prix max</th>
+          <th class="num">Dernier prix</th><th>Dernière date</th>
+        </tr></thead>
+        <tbody>${html}</tbody>
+      </table>
+    </div>`;
+}
+
+/** Vue par mois */
+function _fcRenderAnalyticsByMonth(mvs) {
+  const map = {};
+  mvs.forEach(m => {
+    const d = _fcParseDate(m.date);
+    const key = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : 'inconnu';
+    const label = d ? d.toLocaleDateString('fr-CH', {month:'long', year:'numeric'}) : 'Inconnu';
+    if (!map[key]) map[key] = { key, label, nb: 0, nbArticles: new Set(), valeur: 0, qte: 0 };
+    map[key].nb++;
+    map[key].nbArticles.add(m.article);
+    map[key].valeur += m.quantite * m.prix_unitaire;
+    map[key].qte    += m.quantite;
+  });
+
+  const rows = Object.values(map).sort((a, b) => b.key.localeCompare(a.key));
+  const maxVal = Math.max(...rows.map(r => r.valeur), 1);
+
+  if (!rows.length) {
+    document.getElementById('fc-ana-table').innerHTML =
+      '<div style="padding:32px;text-align:center;color:var(--gray-400);">Aucun mouvement dans cette période.</div>';
+    return;
+  }
+
+  const html = rows.map(r => `
+    <tr>
+      <td style="font-family:'Archivo';font-weight:700;">${r.label}</td>
+      <td class="num">${r.nb}</td>
+      <td class="num">${r.nbArticles.size}</td>
+      <td class="num" style="font-weight:700;color:var(--phar-navy);">${fcFmt(r.valeur)}</td>
+      <td style="width:200px;padding-right:16px;">
+        <div style="height:8px;background:var(--gray-100);border-radius:2px;overflow:hidden;">
+          <div style="height:100%;width:${(r.valeur/maxVal*100).toFixed(1)}%;background:var(--phar-navy);border-radius:2px;"></div>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('fc-ana-table').innerHTML = `
+    <div class="inv-table-scroll">
+      <table class="data-table" style="font-size:13px;">
+        <thead><tr>
+          <th>Mois</th><th class="num">Mouvements</th><th class="num">Articles</th>
+          <th class="num">Valeur CHF</th><th>Répartition</th>
+        </tr></thead>
+        <tbody>${html}</tbody>
+      </table>
+    </div>`;
+}
+
+/** Vue par fournisseur */
+function _fcRenderAnalyticsByFournisseur(mvs) {
+  const map = {};
+  mvs.forEach(m => {
+    const k = m.fournisseur || 'Inconnu';
+    if (!map[k]) map[k] = { fournisseur: k, nb: 0, articles: new Set(), valeur: 0 };
+    map[k].nb++;
+    map[k].articles.add(m.article);
+    map[k].valeur += m.quantite * m.prix_unitaire;
+  });
+
+  const rows = Object.values(map).sort((a, b) => b.valeur - a.valeur);
+  const maxVal = Math.max(...rows.map(r => r.valeur), 1);
+
+  if (!rows.length) {
+    document.getElementById('fc-ana-table').innerHTML =
+      '<div style="padding:32px;text-align:center;color:var(--gray-400);">Aucun mouvement dans cette période.</div>';
+    return;
+  }
+
+  const html = rows.map((r, i) => `
+    <tr>
+      <td style="color:var(--gray-400);font-size:11px;">${i+1}</td>
+      <td style="font-weight:700;">${r.fournisseur}</td>
+      <td class="num">${r.nb}</td>
+      <td class="num">${r.articles.size}</td>
+      <td class="num" style="font-weight:700;color:var(--phar-navy);">${fcFmt(r.valeur)}</td>
+      <td style="width:180px;">
+        <div style="height:8px;background:var(--gray-100);border-radius:2px;overflow:hidden;">
+          <div style="height:100%;width:${(r.valeur/maxVal*100).toFixed(1)}%;background:var(--phar-navy);border-radius:2px;"></div>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('fc-ana-table').innerHTML = `
+    <div class="inv-table-scroll">
+      <table class="data-table" style="font-size:13px;">
+        <thead><tr>
+          <th>#</th><th>Fournisseur</th><th class="num">Livraisons</th>
+          <th class="num">Articles</th><th class="num">Valeur CHF</th><th>Répartition</th>
+        </tr></thead>
+        <tbody>${html}</tbody>
+      </table>
+    </div>`;
+}
+
+/** Vue pivot : articles × mois */
+function _fcRenderAnalyticsPivot(mvs) {
+  // Collecter les mois uniques et les articles uniques
+  const monthsSet = new Set();
+  const articlesSet = new Set();
+  mvs.forEach(m => {
+    const d = _fcParseDate(m.date);
+    if (d) monthsSet.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    articlesSet.add(m.article);
+  });
+  const months   = [...monthsSet].sort();
+  const articles = [...articlesSet].sort();
+
+  if (!months.length) {
+    document.getElementById('fc-ana-table').innerHTML =
+      '<div style="padding:32px;text-align:center;color:var(--gray-400);">Aucun mouvement dans cette période.</div>';
+    return;
+  }
+
+  // Construire la matrice article × mois → valeur
+  const matrix = {};
+  articles.forEach(a => { matrix[a] = {}; months.forEach(mo => { matrix[a][mo] = 0; }); });
+  mvs.forEach(m => {
+    const d = _fcParseDate(m.date);
+    if (!d) return;
+    const mo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if (matrix[m.article] && matrix[m.article][mo] !== undefined)
+      matrix[m.article][mo] += m.quantite * m.prix_unitaire;
+  });
+
+  const monthLabels = months.map(mo => {
+    const [y, mo2] = mo.split('-');
+    return new Date(+y, +mo2-1, 1).toLocaleDateString('fr-CH', {month:'short', year:'2-digit'});
+  });
+  const maxCell = Math.max(...articles.flatMap(a => months.map(mo => matrix[a][mo])), 1);
+
+  const theadHtml = `<tr>
+    <th>Article</th>
+    ${monthLabels.map(l => `<th class="num" style="min-width:80px;">${l}</th>`).join('')}
+    <th class="num">Total</th>
+  </tr>`;
+
+  const tbodyHtml = articles.map(art => {
+    const total = months.reduce((s, mo) => s + matrix[art][mo], 0);
+    const cells = months.map(mo => {
+      const v = matrix[art][mo];
+      const intensity = Math.round(v / maxCell * 100);
+      return `<td class="num" style="font-size:11px;font-variant-numeric:tabular-nums;
+        background:${v > 0 ? `rgba(38,59,139,${(intensity/100*0.25+0.03).toFixed(2)})` : 'transparent'};
+        color:${v > 0 ? 'var(--phar-navy)' : 'var(--gray-300)'};">
+        ${v > 0 ? fcFmt(v) : '—'}</td>`;
+    }).join('');
+    return `<tr>
+      <td style="font-weight:600;font-size:12px;max-width:180px;">${art}</td>
+      ${cells}
+      <td class="num" style="font-weight:700;color:var(--phar-navy);">${fcFmt(total)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('fc-ana-table').innerHTML = `
+    <div class="inv-table-scroll" style="max-height:420px;overflow:auto;">
+      <table class="data-table" style="font-size:12px;">
+        <thead>${theadHtml}</thead>
+        <tbody>${tbodyHtml}</tbody>
+      </table>
+    </div>`;
+}
+
+/** Export Excel depuis la vue analytics */
+function fcExportAnalyticsExcel() {
+  if (typeof XLSX === 'undefined') {
+    if (typeof showToast === 'function') showToast('XLSX non disponible.', 'error');
+    return;
+  }
+  const groupBy = document.getElementById('fc-ana-group')?.value || 'article';
+  const mvs     = _fcFilterMouvements();
+  if (!mvs.length) {
+    if (typeof showToast === 'function') showToast('Aucun mouvement à exporter.', 'error');
+    return;
+  }
+
+  let header, rows;
+
+  if (groupBy === 'mois') {
+    const map = {};
+    mvs.forEach(m => {
+      const d = _fcParseDate(m.date);
+      const key = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : '?';
+      if (!map[key]) map[key] = { mois: key, nb: 0, valeur: 0 };
+      map[key].nb++;
+      map[key].valeur += m.quantite * m.prix_unitaire;
+    });
+    header = ['Mois','Mouvements','Valeur CHF'];
+    rows   = Object.values(map).sort((a,b)=>b.mois.localeCompare(a.mois))
+               .map(r => [r.mois, r.nb, r.valeur]);
+
+  } else if (groupBy === 'fournisseur') {
+    const map = {};
+    mvs.forEach(m => {
+      const k = m.fournisseur || '?';
+      if (!map[k]) map[k] = { f: k, nb: 0, valeur: 0 };
+      map[k].nb++;
+      map[k].valeur += m.quantite * m.prix_unitaire;
+    });
+    header = ['Fournisseur','Mouvements','Valeur CHF'];
+    rows   = Object.values(map).sort((a,b)=>b.valeur-a.valeur).map(r=>[r.f, r.nb, r.valeur]);
+
+  } else {
+    // Par article (défaut + pivot)
+    header = ['Date','Mercuriale','Article','Fournisseur','N° BL','Qté','Unité','PU HT','Valeur HT','POS'];
+    rows   = mvs.map(m => [
+      m.date, m.mercuriale === 'bev' ? 'Boissons' : 'Food',
+      m.article, m.fournisseur, m.bl_numero,
+      m.quantite, m.unite, m.prix_unitaire,
+      m.quantite * m.prix_unitaire, m.pos
+    ]);
+  }
+
+  const fromVal = document.getElementById('fc-ana-from')?.value || '';
+  const toVal   = document.getElementById('fc-ana-to')?.value   || '';
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Analyse entrées');
+  XLSX.writeFile(wb, `Analyse_stock_${fromVal.replace(/\./g,'-')}_${toVal.replace(/\./g,'-')}.xlsx`);
+  if (typeof showToast === 'function') showToast('✓ Export Excel généré.', 'success');
+}
+
+/** Export PDF une-page de l'analytics */
+function fcExportAnalyticsPDF() {
+  const mvs = _fcFilterMouvements();
+  if (!mvs.length) { if (typeof showToast === 'function') showToast('Aucun mouvement.', 'error'); return; }
+  const from = document.getElementById('fc-ana-from')?.value || '—';
+  const to   = document.getElementById('fc-ana-to')?.value   || '—';
+
+  // Agréger par article
+  const map = {};
+  mvs.forEach(m => {
+    if (!map[m.article]) map[m.article] = { article: m.article, nb: 0, valeur: 0, fournisseur: m.fournisseur || '' };
+    map[m.article].nb++;
+    map[m.article].valeur += m.quantite * m.prix_unitaire;
+  });
+  const rows = Object.values(map).sort((a,b)=>b.valeur-a.valeur);
+  const total = rows.reduce((s,r)=>s+r.valeur,0);
+  const date  = new Date().toLocaleDateString('fr-CH');
+
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+  <title>Analyse stock · ${from} – ${to}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:11px;color:#1A1A18;margin:20px;}
+    h1{font-size:18px;color:#263B8B;margin:0 0 2px;}
+    .meta{color:#6B6B65;font-size:10px;margin-bottom:14px;}
+    table{width:100%;border-collapse:collapse;}
+    th{background:#263B8B;color:white;padding:5px 8px;text-align:left;font-size:9px;text-transform:uppercase;}
+    td{padding:4px 8px;border-bottom:1px solid #F4F3F3;}
+    td.num{text-align:right;font-variant-numeric:tabular-nums;}
+    .total{font-weight:800;background:#E8EBF5;}
+    .footer{margin-top:16px;font-size:9px;color:#9A9A95;border-top:1px solid #E8E8E8;padding-top:6px;}
+    @media print{@page{size:A4;margin:10mm;}}
+  </style></head><body>
+  <h1>Analyse entrées en stock · ${from} → ${to}</h1>
+  <div class="meta">Hôtel Bellerive · Vevey · Imprimé le ${date} · ${rows.length} articles · ${mvs.length} mouvements</div>
+  <table>
+    <thead><tr><th>#</th><th>Article</th><th>Fournisseur</th><th class="num">Livraisons</th><th class="num">Valeur CHF</th><th class="num">% total</th></tr></thead>
+    <tbody>
+      ${rows.map((r,i)=>`<tr>
+        <td style="color:#9A9A95;text-align:right;">${i+1}</td>
+        <td>${r.article}</td><td style="font-size:10px;color:#6B6B65;">${r.fournisseur}</td>
+        <td class="num">${r.nb}</td>
+        <td class="num" style="font-weight:700;">${fcFmt(r.valeur)}</td>
+        <td class="num">${total>0?((r.valeur/total)*100).toFixed(1)+'%':'—'}</td>
+      </tr>`).join('')}
+      <tr class="total"><td colspan="4" style="text-align:right;">TOTAL</td>
+        <td class="num">${fcFmt(total)}</td><td class="num">100%</td></tr>
+    </tbody>
+  </table>
+  <div class="footer">PHAR Cost v1.0 · © PHAR SA 2026 · Période : ${from} – ${to}</div>
+  <script>window.onload=()=>window.print();<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+/** Injecte le modal Analytics dans le DOM */
+function _fcInjectAnalyticsModal() {
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <div class="modal-backdrop" id="fc-analytics-modal">
+      <div class="modal" style="max-width:1000px;width:95vw;max-height:92vh;">
+        <div class="modal-header">
+          <div class="modal-title">Analyse & Export · Entrées en stock</div>
+          <button class="modal-close" onclick="document.getElementById('fc-analytics-modal').classList.remove('visible')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body" style="overflow-y:auto;max-height:calc(92vh - 130px);">
+
+          <!-- Filtres -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:12px;align-items:flex-end;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--gray-200);">
+            <div>
+              <label class="field-label">Du</label>
+              <input type="text" id="fc-ana-from" placeholder="JJ.MM.AAAA"
+                     style="font-variant-numeric:tabular-nums;" oninput="fcRunAnalytics()">
+            </div>
+            <div>
+              <label class="field-label">Au</label>
+              <input type="text" id="fc-ana-to" placeholder="JJ.MM.AAAA"
+                     style="font-variant-numeric:tabular-nums;" oninput="fcRunAnalytics()">
+            </div>
+            <div>
+              <label class="field-label">Mercuriale</label>
+              <select id="fc-ana-merc" onchange="fcRunAnalytics()">
+                <option value="all">Toutes</option>
+                <option value="food">Food</option>
+                <option value="bev">Boissons</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label">Vue</label>
+              <select id="fc-ana-group" onchange="fcRunAnalytics()">
+                <option value="article">Par article</option>
+                <option value="mois">Par mois</option>
+                <option value="fournisseur">Par fournisseur</option>
+                <option value="pivot">Pivot article × mois</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" style="visibility:hidden;">.</label>
+              <button class="btn btn-ghost btn-sm" onclick="fcRunAnalytics()">↺ Actualiser</button>
+            </div>
+          </div>
+
+          <!-- Recherche article -->
+          <div style="margin-bottom:16px;">
+            <input type="text" id="fc-ana-search" placeholder="Filtrer par article ou fournisseur…"
+                   style="max-width:400px;" oninput="fcRunAnalytics()">
+          </div>
+
+          <!-- KPIs -->
+          <div id="fc-ana-kpis"></div>
+
+          <!-- Tableau résultats -->
+          <div id="fc-ana-table">
+            <div style="padding:32px;text-align:center;color:var(--gray-400);">Chargement…</div>
+          </div>
+
+        </div>
+        <div class="modal-footer" style="justify-content:space-between;">
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="fcExportAnalyticsPDF()">
+              Exporter PDF
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="fcExportAnalyticsExcel()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px;height:14px;stroke-width:2;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" transform="rotate(180 12 12)"/>
+              </svg>
+              Exporter Excel
+            </button>
+          </div>
+          <button class="btn btn-primary" onclick="document.getElementById('fc-analytics-modal').classList.remove('visible')">Fermer</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  document.getElementById('fc-analytics-modal').addEventListener('click', e => {
+    if (e.target.id === 'fc-analytics-modal') e.target.classList.remove('visible');
+  });
+}
+
 /* ─── Init ───────────────────────────────────────────────────── */
 fcLoad();
 injectFCModals();
+_fcInjectAnalyticsModal();
 renderFC1();
 renderFC2BLRapprochement();
 renderFC3();
 renderFC4();
 renderFC5();
+fcPopulateConsolidePickers();
 _fcRefreshFacturesList();
