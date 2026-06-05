@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="clients.js"></script><!-- ← DOIT être avant tout autre script -->
 <style>
   /* ============================================================
      PHAR COST — Design System v1.0
@@ -1648,9 +1649,8 @@
       <span class="breadcrumb-current" id="breadcrumb-current">Fiches techniques</span>
     </div>
     <div class="header-right">
-      <div class="establishment" title="Changer d'établissement">
-        Hôtel Bellerive · Vevey
-      </div>
+      <!-- Slot client — rempli par clients.js -->
+      <div id="header-client-slot"></div>
       <div class="header-divider"></div>
       <button class="icon-btn" title="Recherche">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
@@ -2024,6 +2024,7 @@
                   <th class="num">CUMP</th>
                   <th style="text-align:center;">TVA achat</th>
                   <th style="text-align:center;">Merc.</th>
+                  <th style="text-align:center;">SKU LS</th>
                   <th></th>
                 </tr>
               </thead>

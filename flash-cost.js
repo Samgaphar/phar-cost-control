@@ -2361,6 +2361,10 @@ function acRenderArticles() {
       <td style="text-align:center;">
         <span class="badge ${a._merc==='bev'?'badge-info':'badge-success'}" style="font-size:10px;">${a._merc==='bev'?'Bois.':'Food'}</span>
       </td>
+      <td style="text-align:center;">${(function(){
+        const sku = typeof getSkuForArticle==='function' ? getSkuForArticle(a.article) : null;
+        return sku ? `<span style="font-family:monospace;font-size:10px;color:var(--phar-navy);background:var(--phar-navy-faint);padding:2px 6px;border-radius:3px;" title="${sku.ls_name||''}">${sku.ls_sku}</span>` : '<span style="color:var(--gray-300);font-size:11px;">—</span>';
+      })()}</td>
       <td style="text-align:right;">
         <button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:4px 8px;"
                 onclick="acDeleteArticle('${a._merc}','${(a.article||'').replace(/'/g,"\\'")}')">✕</button>
