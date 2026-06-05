@@ -14,6 +14,60 @@ const FC_LS = {
 
 const FC_FAMILLES = ['Viande', 'Poisson', 'Épicerie', 'Boulangerie-BOF', 'Boissons'];
 
+/* ─── Catégories & TVA ───────────────────────────────────────── */
+const FC_CATEGORIES = [
+  'Viande', 'Poisson & Fruits de mer', 'Légumes & Fruits',
+  'Épicerie sèche', 'Laitier & BOF', 'Boulangerie & Pâtisserie',
+  'Vins', 'Champagnes & Mousseux', 'Spiritueux', 'Bières',
+  'Boissons sans alcool', 'Café & Thé',
+  'Condiments & Sauces', 'Nettoyage', 'Autres'
+];
+
+// Catégories alcool → TVA 8.1%
+const FC_CAT_ALCOOL = new Set(['Vins','Champagnes & Mousseux','Spiritueux','Bières']);
+
+// Mots-clés par catégorie (normalisés sans accents)
+const FC_CAT_KW = {
+  'Vins':                  ['vin ','vins','wine','rouge','blanc','rose','rosé','chasselas','pinot','merlot','syrah','gamay','chardonnay','sauvignon','riesling','fendant','dole','dôle','viognier','gewurz','cepage','aigle','calamin','chardonne','obrist'],
+  'Champagnes & Mousseux': ['champagne','prosecco','cava','mousseux','petillant','cremant','crémant','spumante','sekt'],
+  'Spiritueux':            ['whisky','whiskey','vodka',' gin ','rhum','rum','cognac','armagnac','liqueur','aperol','campari','amaretto','baileys','cointreau','kirsch','brandy','grappa','marc','porto','eaude vie','eau-de-vie','absinthe','pastis','mezcal','tequila','calvados'],
+  'Bières':                ['biere','bière','beer',' ale ',' ipa ','lager','stout','pils','blanche','craft','ambrée','ambree','hefeweizen','radler','weizen'],
+  'Boissons sans alcool':  ['coca','cola','pepsi','fanta','sprite','limonade','jus d','sirop','minerale','mineralé','thé glacé','ice tea','redbull','energy','tonic','soda','bitter','crodino','schweppes','grenadine','capri','elka'],
+  'Café & Thé':            ['cafe','café','coffee','nespresso','expresso','espresso','the ','thé ','tea','infusion','tisane','matcha','lungo','ristretto','nescafe'],
+  'Viande':                ['boeuf','bœuf','veau','porc','agneau','mouton','volaille','poulet','canard','foie','filet','entrecote','cote de','jambon','bacon','lardons','saucisse','charcuterie','dinde','lapin','gibier','cerf','sanglier','magret','confit','pigeon'],
+  'Poisson & Fruits de mer':['saumon','thon','cabillaud','sole','bar ','daurade','truite','crevette','langoustine','homard','crabe','moule','huitre','huître','coquille','saint-jacques','poulpe','pieuvre','seiche','anguille','fumé','fumee'],
+  'Légumes & Fruits':      ['tomate','salade','laitue','epinard','courgette','aubergine','carotte','pomme de terre','oignon','echalote','ail ','poireau','brocoli','chou','champignon','poivron','asperge','artichaut','pomme','poire','fraise','framboise','citron','orange','melon','raisin','figue','banane','mangue','avocat','truffe','bolet'],
+  'Laitier & BOF':         ['fromage','beurre','creme','crème','lait','yaourt','yogourt','mozzarella','parmesan','gruyere','gruyère','emmental','roquefort','camembert','brie','ricotta','mascarpone','burrata','feta','raclette','comte','comté','epoisses','marechal'],
+  'Boulangerie & Pâtisserie':['pain','baguette','brioche','croissant','madeleine','gateau','tarte','farine','levure','feuilletage','chocolat','cacao','vanille','praline'],
+  'Épicerie sèche':        ['pates','pâtes',' riz ','lentille','haricot','quinoa','semoule','huile','vinaigre',' sel ','poivre','epice','epices','herbe','bouillon','fond ','fonds','sauce ','concasse','cornichon','moutarde','mayonnaise','huile d'],
+  'Condiments & Sauces':   ['ketchup','tabasco','worcester','soja','nuoc','pesto','tapenade'],
+  'Nettoyage':             ['detergent','nettoyant','desinfectant','savon','lessive','eponge','torchon']
+};
+
+/** Détecte automatiquement la catégorie d'un article */
+function fcAutoCategory(text) {
+  if (!text) return 'Autres';
+  const t = (' ' + text.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') + ' ');
+  for (const [cat, kws] of Object.entries(FC_CAT_KW)) {
+    if (kws.some(kw => t.includes(kw))) return cat;
+  }
+  return 'Autres';
+}
+
+/**
+ * Retourne le taux TVA applicable à un achat F&B :
+ *   8.1% → alcool (vins, spiritueux, bières, mousseux)
+ *   2.6% → tout le reste (food, boissons sans alcool, etc.)
+ * Note : 3.8% s'applique UNIQUEMENT aux ventes (PDJ / chambres hotel) — pas aux achats.
+ */
+function fcAutoTVA(text, categorie) {
+  if (categorie && FC_CAT_ALCOOL.has(categorie)) return 8.1;
+  const cat = fcAutoCategory(text);
+  if (FC_CAT_ALCOOL.has(cat)) return 8.1;
+  return 2.6;
+}
+
 const FC_TARGET_RATIO = 30; // %
 
 /* ─── Demo fixtures ──────────────────────────────────────────── */
@@ -2082,6 +2136,441 @@ function _fcInjectAnalyticsModal() {
   });
 }
 
+/* ─── Override renderScanResultCard : TVA + catégorie auto ──── */
+
+/**
+ * Remplace la fonction index.html pour afficher :
+ * PU HT | Qté | Total HT | TVA % | Total TTC | Catégorie (éditable)
+ */
+window.renderScanResultCard = function(bl) {
+  const totalTTC = bl.total_ttc || 0;
+  let articlesHtml = '';
+
+  if (bl.articles && bl.articles.length) {
+    const rows = bl.articles.map((a, idx) => {
+      const cat       = a.categorie_suggeree || fcAutoCategory(a.designation || '');
+      const tva       = fcAutoTVA(a.designation || '', cat);
+      const puHT      = parseFloat(a.prix_unitaire_ht) || 0;
+      const qte       = parseFloat(a.quantite) || 0;
+      const totalHT   = puHT * qte;
+      const totalTTCl = totalHT * (1 + tva / 100);
+      const catOpts   = FC_CATEGORIES.map(c =>
+        `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`
+      ).join('');
+      return `<tr id="bl-art-row-${bl.id}-${idx}">
+        <td style="font-size:11px;color:var(--gray-500);">${a.ref || '—'}</td>
+        <td style="font-weight:600;max-width:200px;">${a.designation || '—'}</td>
+        <td class="num">${qte.toString().replace('.', ',')}</td>
+        <td>${a.unite || '—'}</td>
+        <td class="num" style="font-variant-numeric:tabular-nums;">${puHT.toFixed(2)}</td>
+        <td class="num" style="font-weight:700;font-variant-numeric:tabular-nums;">${totalHT.toFixed(2)}</td>
+        <td style="text-align:center;">
+          <span class="badge ${tva > 3 ? 'badge-warning' : 'badge-success'}" style="font-size:10px;">${tva}%</span>
+        </td>
+        <td class="num" style="font-weight:700;color:var(--phar-navy);font-variant-numeric:tabular-nums;">${totalTTCl.toFixed(2)}</td>
+        <td>
+          <select style="font-size:11px;padding:4px 6px;border:1px solid var(--gray-200);border-radius:3px;background:var(--white);"
+                  onchange="_blUpdateArticleCat('${bl.id}',${idx},this.value)">
+            ${catOpts}
+          </select>
+        </td>
+      </tr>`;
+    }).join('');
+
+    // Totaux recalculés avec TVA auto
+    const totHT  = bl.articles.reduce((s, a) => s + (parseFloat(a.quantite)||0)*(parseFloat(a.prix_unitaire_ht)||0), 0);
+    const totTTC = bl.articles.reduce((a, art) => {
+      const cat = art.categorie_suggeree || fcAutoCategory(art.designation||'');
+      const tva = fcAutoTVA(art.designation||'', cat);
+      return a + (parseFloat(art.quantite)||0)*(parseFloat(art.prix_unitaire_ht)||0)*(1+tva/100);
+    }, 0);
+
+    articlesHtml = `
+      <div class="inv-table-scroll">
+        <table class="data-table" style="font-size:12px;">
+          <thead><tr>
+            <th>Réf.</th><th>Désignation</th>
+            <th class="num">Qté</th><th>Unité</th>
+            <th class="num">PU HT</th><th class="num">Total HT</th>
+            <th style="text-align:center;">TVA</th>
+            <th class="num">Total TTC</th>
+            <th>Catégorie</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr style="background:var(--phar-navy-pale);">
+              <td colspan="5" style="padding:8px 16px;font-weight:700;color:var(--phar-navy);">Totaux</td>
+              <td class="num" style="font-weight:700;">${totHT.toFixed(2)}</td>
+              <td></td>
+              <td class="num" style="font-weight:800;font-family:'Archivo';font-size:13px;color:var(--phar-navy);">${totTTC.toFixed(2)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`;
+  }
+
+  const card = document.createElement('div');
+  card.className = 'scan-result-card';
+  card.style.marginBottom = '16px';
+  card.dataset.blId = bl.id;
+  card.innerHTML = `
+    <div class="scan-result-header">
+      <h3>✓ ${bl.type_document === 'facture' ? 'Facture' : 'Bon de livraison'}${bl.fichier ? ' · ' + bl.fichier : ''}</h3>
+      <button class="btn btn-primary btn-sm" onclick="openBLIntegrationModalFromBL('${bl.id}')">Intégrer à l'inventaire</button>
+    </div>
+    <div class="scan-meta-grid">
+      <div class="scan-meta-item"><div class="label">Fournisseur</div><div class="value">${bl.fournisseur || '—'}</div></div>
+      <div class="scan-meta-item"><div class="label">N° document</div><div class="value">${bl.numero || '—'}</div></div>
+      <div class="scan-meta-item"><div class="label">Date</div><div class="value">${bl.date || '—'}</div></div>
+      <div class="scan-meta-item">
+        <div class="label">Total TTC</div>
+        <div class="value" style="color:var(--phar-navy);">${(totalTTC || 0).toFixed(2)} CHF</div>
+      </div>
+    </div>
+    ${articlesHtml}
+    ${bl.notes ? `<div style="padding:10px 20px;background:var(--gray-50);border-top:1px solid var(--gray-200);font-size:12px;color:var(--gray-700);"><strong>Notes :</strong> ${bl.notes}</div>` : ''}`;
+
+  document.getElementById('bl-scan-results').appendChild(card);
+};
+
+/** Met à jour la catégorie d'un article d'un BL persisté (et recalcule la TVA) */
+function _blUpdateArticleCat(blId, idx, newCat) {
+  const bl = (typeof pharBLs !== 'undefined' ? pharBLs : []).find(b => b.id === blId);
+  if (!bl || !bl.articles || !bl.articles[idx]) return;
+  bl.articles[idx].categorie_suggeree = newCat;
+  if (typeof saveStores === 'function') saveStores();
+  // Recalculer la TVA affichée dans la même ligne
+  const tva  = fcAutoTVA(bl.articles[idx].designation || '', newCat);
+  const puHT = parseFloat(bl.articles[idx].prix_unitaire_ht) || 0;
+  const qte  = parseFloat(bl.articles[idx].quantite) || 0;
+  const ttc  = (puHT * qte * (1 + tva / 100)).toFixed(2);
+  const row  = document.getElementById(`bl-art-row-${blId}-${idx}`);
+  if (row) {
+    const cells = row.querySelectorAll('td');
+    // TVA badge (col 6)
+    cells[6].innerHTML = `<span class="badge ${tva > 3 ? 'badge-warning' : 'badge-success'}" style="font-size:10px;">${tva}%</span>`;
+    // Total TTC (col 7)
+    cells[7].textContent = ttc;
+  }
+  if (typeof showToast === 'function')
+    showToast(`Catégorie → ${newCat} · TVA ${tva}%`, '');
+}
+
+/* ─── MODULE Articles & Configuration ───────────────────────── */
+
+function switchACTab(tab) {
+  document.querySelectorAll('.subtab[data-ac-tab]').forEach(b =>
+    b.classList.toggle('active', b.dataset.acTab === tab));
+  document.querySelectorAll('.ac-tabpane').forEach(p => p.classList.remove('active'));
+  const pane = document.getElementById('ac-pane-' + tab);
+  if (pane) pane.classList.add('active');
+
+  if (tab === 'articles')    acRenderArticles();
+  if (tab === 'prix')        acRenderPrix();
+  if (tab === 'categories')  acRenderCategories();
+  if (tab === 'fournisseurs') acRenderFournisseurs();
+}
+
+/** Retourne tous les articles food + bev avec leur mercuriale */
+function acGetAllArticles() {
+  const food = (typeof pharStores !== 'undefined' ? pharStores.food : []).map(a => ({...a, _merc:'food'}));
+  const bev  = (typeof pharStores !== 'undefined' ? pharStores.bev  : []).map(a => ({...a, _merc:'bev'}));
+  return [...food, ...bev];
+}
+
+function acRenderArticles() {
+  const tbody   = document.getElementById('ac-articles-tbody');
+  const countEl = document.getElementById('ac-count');
+  if (!tbody) return;
+
+  const search   = (document.getElementById('ac-search')?.value   || '').toLowerCase();
+  const merc     = (document.getElementById('ac-filter-merc')?.value || 'all');
+  const catFilter = (document.getElementById('ac-filter-cat')?.value || 'all');
+
+  // Populate category filter
+  const catSel = document.getElementById('ac-filter-cat');
+  if (catSel && catSel.options.length <= 1) {
+    FC_CATEGORIES.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      catSel.appendChild(opt);
+    });
+  }
+
+  let articles = acGetAllArticles();
+
+  if (merc !== 'all')        articles = articles.filter(a => a._merc === merc);
+  if (catFilter !== 'all')   articles = articles.filter(a => {
+    const cat = a._ac_cat || fcAutoCategory(a.article);
+    return cat === catFilter;
+  });
+  if (search) articles = articles.filter(a =>
+    a.article.toLowerCase().includes(search) ||
+    (a.fournisseur||'').toLowerCase().includes(search)
+  );
+
+  if (countEl) countEl.textContent = `${articles.length} article(s) affiché(s)`;
+
+  if (!articles.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-400);">Aucun article trouvé.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = articles.map((a, idx) => {
+    const cat     = a._ac_cat || fcAutoCategory(a.article);
+    const tva     = fcAutoTVA(a.article, cat);
+    const cump    = a.cump != null ? a.cump : a.pu;
+    const cumpDiff = Math.abs(cump - a.pu) > 0.01;
+    const catOpts = FC_CATEGORIES.map(c =>
+      `<option value="${c}" ${c===cat?'selected':''}>${c}</option>`).join('');
+    return `<tr>
+      <td style="font-weight:600;max-width:200px;">
+        <input type="text" value="${(a.article||'').replace(/"/g,'&quot;')}"
+               style="border:none;background:transparent;width:100%;font-weight:600;"
+               onchange="acUpdateArticle('${a._merc}','${(a.article||'').replace(/'/g,"\\'")}','nom',this.value)"
+               onblur="if(this.value!='${(a.article||'').replace(/'/g,"\\'")}')acRenderArticles()">
+      </td>
+      <td>
+        <select style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:3px;"
+                onchange="acUpdateArticle('${a._merc}','${(a.article||'').replace(/'/g,"\\'")}','cat',this.value);this.closest('tr').querySelector('td:nth-child(7)').textContent=fcAutoTVA('${(a.article||'').replace(/'/g,"\\'")}',this.value)+'%'">
+          ${catOpts}
+        </select>
+      </td>
+      <td>
+        <input type="text" value="${(a.fournisseur||'').replace(/"/g,'&quot;')}"
+               style="font-size:11px;border:none;background:transparent;color:var(--gray-500);width:100%;"
+               onchange="acUpdateArticle('${a._merc}','${(a.article||'').replace(/'/g,"\\'")}','fournisseur',this.value)">
+      </td>
+      <td style="text-align:center;">
+        <input type="text" value="${a.unite||''}"
+               style="font-size:11px;border:none;background:transparent;text-align:center;width:52px;"
+               onchange="acUpdateArticle('${a._merc}','${(a.article||'').replace(/'/g,"\\'")}','unite',this.value)">
+      </td>
+      <td class="num">
+        <input type="number" value="${a.pu.toFixed(2)}" step="0.01" min="0"
+               style="text-align:right;width:72px;font-weight:600;border:none;background:transparent;"
+               onchange="acUpdateArticle('${a._merc}','${(a.article||'').replace(/'/g,"\\'")}','pu',parseFloat(this.value))">
+      </td>
+      <td class="num" style="${cumpDiff?'color:var(--phar-navy);font-weight:600;':'color:var(--gray-400);'}">
+        ${cump.toFixed(2)}
+      </td>
+      <td style="text-align:center;">
+        <span class="badge ${tva > 3 ? 'badge-warning' : 'badge-success'}" style="font-size:10px;">${tva}%</span>
+      </td>
+      <td style="text-align:center;">
+        <span class="badge ${a._merc==='bev'?'badge-info':'badge-success'}" style="font-size:10px;">${a._merc==='bev'?'Bois.':'Food'}</span>
+      </td>
+      <td style="text-align:right;">
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:4px 8px;"
+                onclick="acDeleteArticle('${a._merc}','${(a.article||'').replace(/'/g,"\\'")}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function acUpdateArticle(merc, originalName, field, value) {
+  if (typeof pharStores === 'undefined') return;
+  const arr  = pharStores[merc];
+  const item = arr.find(a => a.article === originalName);
+  if (!item) return;
+  if (field === 'nom')        item.article    = value;
+  else if (field === 'pu')    { item.pu = parseFloat(value)||0; }
+  else if (field === 'fournisseur') item.fournisseur = value;
+  else if (field === 'unite') item.unite      = value;
+  else if (field === 'cat')   item._ac_cat    = value;
+  if (typeof saveStores === 'function') saveStores();
+}
+
+function acDeleteArticle(merc, name) {
+  if (!confirm(`Supprimer "${name}" de la mercuriale ${merc==='food'?'Food':'Boissons'} ?`)) return;
+  if (typeof pharStores !== 'undefined') {
+    pharStores[merc] = pharStores[merc].filter(a => a.article !== name);
+    if (typeof saveStores === 'function') saveStores();
+    acRenderArticles();
+    if (typeof showToast === 'function') showToast(`Article "${name}" supprimé.`, '');
+  }
+}
+
+function acNewArticle() {
+  const merc  = document.getElementById('ac-filter-merc')?.value;
+  const m     = (merc === 'bev') ? 'bev' : 'food';
+  const nom   = prompt('Nom du nouvel article :');
+  if (!nom || !nom.trim()) return;
+  const pu    = parseFloat(prompt('Prix unitaire HT (CHF) :') || '0') || 0;
+  const unite = prompt('Unité (kg, pce, btl…) :') || 'pce';
+  const cat   = fcAutoCategory(nom);
+  const pos   = Object.fromEntries(
+    (typeof POS_DEFINITIONS !== 'undefined' ? POS_DEFINITIONS[m] : []).map(p => [p, 0])
+  );
+  if (typeof pharStores !== 'undefined') {
+    const item = { groupe: m==='food'?'Food':'Minérales', article: nom.trim(),
+      unite, fournisseur:'', pu, cump:pu, prix_reference:pu, historique_prix:[],
+      lightspeed_sku:null, pos, mois_m1:0, _ac_cat: cat };
+    pharStores[m].push(item);
+    if (typeof saveStores === 'function') saveStores();
+    acRenderArticles();
+    if (typeof showToast === 'function') showToast(`✓ "${nom}" ajouté (${cat} · TVA ${fcAutoTVA(nom,cat)}%)`, 'success');
+  }
+}
+
+function acExport() {
+  if (typeof XLSX === 'undefined') return;
+  const all = acGetAllArticles();
+  const header = ['Article','Mercuriale','Catégorie','Fournisseur','Unité','PU HT','CUMP','TVA achat %'];
+  const rows   = all.map(a => {
+    const cat = a._ac_cat || fcAutoCategory(a.article);
+    return [a.article, a._merc==='bev'?'Boissons':'Food', cat,
+      a.fournisseur||'', a.unite||'', a.pu, a.cump||a.pu, fcAutoTVA(a.article,cat)];
+  });
+  const ws = XLSX.utils.aoa_to_sheet([header,...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Articles');
+  XLSX.writeFile(wb, `Articles_PHAR_${new Date().toISOString().slice(0,10)}.xlsx`);
+  if (typeof showToast === 'function') showToast('✓ Export Excel généré.', 'success');
+}
+
+function acRenderPrix() {
+  const el = document.getElementById('ac-prix-content');
+  if (!el) return;
+  const seuil = 10; // % d'écart CUMP vs PU de référence
+  const all   = acGetAllArticles().filter(a => {
+    const cump = a.cump != null ? a.cump : a.pu;
+    return a.pu > 0 && Math.abs((cump - a.pu) / a.pu * 100) >= seuil;
+  }).sort((a,b) => {
+    const da = Math.abs(((a.cump||a.pu)-a.pu)/a.pu*100);
+    const db = Math.abs(((b.cump||b.pu)-b.pu)/b.pu*100);
+    return db - da;
+  });
+
+  if (!all.length) {
+    el.innerHTML = `<div style="padding:48px;text-align:center;">
+      <div style="font-size:32px;margin-bottom:12px;">✓</div>
+      <div style="font-weight:600;color:var(--success);">Aucun prix irrégulier</div>
+      <div style="font-size:12px;color:var(--gray-500);margin-top:6px;">Tous les CUMP sont dans la norme (écart < ${seuil}%).</div>
+    </div>`;
+    return;
+  }
+
+  const rows = all.map(a => {
+    const cump  = a.cump || a.pu;
+    const diff  = cump - a.pu;
+    const pct   = (diff / a.pu * 100).toFixed(1);
+    const up    = diff > 0;
+    return `<tr>
+      <td style="font-weight:600;">${a.article}</td>
+      <td><span class="badge ${a._merc==='bev'?'badge-info':'badge-success'}">${a._merc==='bev'?'Boissons':'Food'}</span></td>
+      <td style="font-size:11px;color:var(--gray-500);">${a.fournisseur||'—'}</td>
+      <td class="num">${a.pu.toFixed(2)}</td>
+      <td class="num" style="font-weight:700;color:${up?'var(--danger)':'var(--success)'};">${cump.toFixed(2)}</td>
+      <td class="num" style="font-weight:700;color:${up?'var(--danger)':'var(--success)'};">
+        ${up?'↑':' ↓'} ${Math.abs(diff).toFixed(2)} CHF (${up?'+':''}${pct}%)
+      </td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="alert warning" style="margin-bottom:16px;">
+      <div class="alert-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+      <div class="alert-content">
+        <div class="alert-title">${all.length} article(s) avec prix irréguliers</div>
+        <div class="alert-text">CUMP vs prix de référence · seuil d'alerte : ${seuil}%</div>
+      </div>
+    </div>
+    <div class="card" style="padding:0;">
+      <table class="data-table" style="font-size:13px;">
+        <thead><tr>
+          <th>Article</th><th>Merc.</th><th>Fournisseur</th>
+          <th class="num">PU réf.</th><th class="num">CUMP actuel</th><th class="num">Variation</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function acRenderCategories() {
+  const el = document.getElementById('ac-cat-content');
+  if (!el) return;
+  const all   = acGetAllArticles();
+  const stats = {};
+  FC_CATEGORIES.forEach(c => { stats[c] = { nb:0, val:0 }; });
+  all.forEach(a => {
+    const c = a._ac_cat || fcAutoCategory(a.article);
+    if (!stats[c]) stats[c] = { nb:0, val:0 };
+    stats[c].nb++;
+    stats[c].val += a.pu;
+  });
+
+  const rows = FC_CATEGORIES.map(c => {
+    const tva = FC_CAT_ALCOOL.has(c) ? 8.1 : 2.6;
+    return `<tr>
+      <td style="font-weight:600;">${c}</td>
+      <td class="num">${stats[c]?.nb || 0}</td>
+      <td style="text-align:center;">
+        <span class="badge ${tva>3?'badge-warning':'badge-success'}">${tva}%</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="card" style="padding:0;max-width:600px;">
+      <div class="card-header">
+        <div class="card-title">Catégories d'articles</div>
+        <div class="card-hint">TVA achat associée (2.6% F&B sans alcool · 8.1% alcool)</div>
+      </div>
+      <table class="data-table" style="font-size:13px;">
+        <thead><tr><th>Catégorie</th><th class="num">Articles</th><th style="text-align:center;">TVA achat</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="alert info" style="margin-top:16px;max-width:600px;">
+      <div class="alert-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>
+      <div class="alert-content">
+        <div class="alert-title">Règle TVA suisse — Achats F&B</div>
+        <div class="alert-text">
+          <strong>2.6%</strong> — Alimentation, boissons sans alcool, café, thé (taux réduit)<br>
+          <strong>8.1%</strong> — Boissons alcoolisées : vins, bières, spiritueux, champagnes (taux normal)<br>
+          <strong>3.8%</strong> — Applicable uniquement en vente : prestations hôtelières (PDJ, chambres) — <em>pas sur les achats</em>
+        </div>
+      </div>
+    </div>`;
+}
+
+function acRenderFournisseurs() {
+  const el = document.getElementById('ac-four-content');
+  if (!el) return;
+  const all = acGetAllArticles();
+  const map = {};
+  all.forEach(a => {
+    const f = a.fournisseur || 'Non renseigné';
+    if (!map[f]) map[f] = { f, nb:0, cats:new Set(), pu_total:0 };
+    map[f].nb++;
+    map[f].cats.add(a._ac_cat || fcAutoCategory(a.article));
+    map[f].pu_total += a.pu;
+  });
+  const list = Object.values(map).sort((a,b)=>b.nb-a.nb);
+
+  const rows = list.map((r,i) => `
+    <tr>
+      <td style="color:var(--gray-400);font-size:11px;">${i+1}</td>
+      <td style="font-weight:700;">${r.f}</td>
+      <td class="num">${r.nb}</td>
+      <td style="font-size:11px;color:var(--gray-500);">${[...r.cats].join(', ')}</td>
+    </tr>`).join('');
+
+  el.innerHTML = `
+    <div class="card" style="padding:0;">
+      <div class="card-header">
+        <div class="card-title">Fournisseurs référencés</div>
+        <div class="card-hint">${list.length} fournisseurs · ${all.length} articles</div>
+      </div>
+      <table class="data-table" style="font-size:13px;">
+        <thead><tr><th>#</th><th>Fournisseur</th><th class="num">Articles</th><th>Catégories servies</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
 /* ─── Init ───────────────────────────────────────────────────── */
 fcLoad();
 injectFCModals();
@@ -2093,6 +2582,19 @@ _fcInjectAnalyticsModal();
   const dashItem = document.querySelector('.nav-direct[data-module="dashboard"]');
   if (dashItem && typeof _navSetActive === 'function') _navSetActive(dashItem);
 })();
+
+// Init Articles & Config (lazy — render au premier clic via switchACTab)
+// mais pré-remplir les selects au cas où
+setTimeout(() => {
+  const catSel = document.getElementById('ac-filter-cat');
+  if (catSel && catSel.options.length <= 1) {
+    FC_CATEGORIES.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      catSel.appendChild(opt);
+    });
+  }
+}, 500);
 renderFC1();
 renderFC2BLRapprochement();
 renderFC3();

@@ -1214,6 +1214,8 @@
   .subtab.active { color: var(--phar-navy); border-bottom-color: var(--phar-navy); }
   .achats-tabpane { display: none; }
   .achats-tabpane.active { display: block; }
+  .ac-tabpane { display: none; }
+  .ac-tabpane.active { display: block; }
   .bl-empty {
     padding: 48px 24px;
     text-align: center;
@@ -1678,8 +1680,30 @@
       <span class="nav-group-label">Tableau de bord</span>
     </div>
 
+    <!-- ── Articles & Configuration ─────────────────── -->
+    <div class="nav-group" id="navg-articles-config">
+      <div class="nav-group-hdr" onclick="navToggleGroup('articles-config')">
+        <div class="nav-gicon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        </div>
+        <span class="nav-group-label">Articles &amp; Config</span>
+        <span class="nav-garrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
+      <div class="nav-sub-items">
+        <div class="nav-sub-label">Inventaire</div>
+        <div class="nav-sub-item" data-module="articles-config" data-tab="articles">Articles d'inventaire</div>
+        <div class="nav-sub-item" data-module="articles-config" data-tab="prix">Prix irréguliers</div>
+        <div class="nav-sub-label">Paramétrage</div>
+        <div class="nav-sub-item" data-module="articles-config" data-tab="categories">Catégories</div>
+        <div class="nav-sub-item" data-module="articles-config" data-tab="fournisseurs">Fournisseurs</div>
+        <div class="nav-sub-label">Recettes</div>
+        <div class="nav-sub-item" data-module="recettes">Fiches techniques</div>
+        <div class="nav-sub-item" data-module="fc-articles">Articles leaders FC</div>
+      </div>
+    </div>
+
     <!-- ── Production ───────────────────────────────── -->
-    <div class="nav-group" id="navg-production">
+    <div class="nav-group" id="navg-production" style="display:none;">
       <div class="nav-group-hdr" onclick="navToggleGroup('production')">
         <div class="nav-gicon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
@@ -1941,6 +1965,94 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
             Enregistrer
           </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ARTICLES & CONFIGURATION -->
+    <section class="module" id="module-articles-config">
+
+      <div class="module-header">
+        <div>
+          <div class="module-title-wrap">
+            <div class="module-kicker">Articles &amp; Configuration</div>
+            <h1 class="module-title">Articles &amp; Configuration</h1>
+            <p class="module-subtitle">Gérez l'ensemble de vos articles, catégories, fournisseurs et suivez les prix irréguliers.</p>
+          </div>
+        </div>
+        <div class="module-actions">
+          <button class="btn btn-outline btn-sm" onclick="acExport()">Exporter Excel</button>
+          <button class="btn btn-primary btn-sm" onclick="acNewArticle()">+ Nouvel article</button>
+        </div>
+      </div>
+
+      <div class="subtab-bar">
+        <button class="subtab active" data-ac-tab="articles"     onclick="switchACTab('articles')">Articles d'inventaire</button>
+        <button class="subtab" data-ac-tab="prix"        onclick="switchACTab('prix')">Prix irréguliers</button>
+        <button class="subtab" data-ac-tab="categories"  onclick="switchACTab('categories')">Catégories</button>
+        <button class="subtab" data-ac-tab="fournisseurs" onclick="switchACTab('fournisseurs')">Fournisseurs</button>
+      </div>
+
+      <!-- Articles d'inventaire -->
+      <div class="ac-tabpane active" id="ac-pane-articles">
+        <div class="inv-toolbar" style="margin-bottom:14px;">
+          <div class="inv-filters" style="flex-wrap:wrap;gap:10px;">
+            <input type="text" id="ac-search" placeholder="Rechercher article ou fournisseur…"
+                   style="width:280px;" oninput="acRenderArticles()">
+            <select id="ac-filter-merc" style="width:150px;" onchange="acRenderArticles()">
+              <option value="all">Toutes mercuriales</option>
+              <option value="food">Food</option>
+              <option value="bev">Boissons</option>
+            </select>
+            <select id="ac-filter-cat" style="width:180px;" onchange="acRenderArticles()">
+              <option value="all">Toutes catégories</option>
+            </select>
+          </div>
+          <div style="font-size:12px;color:var(--gray-500);" id="ac-count">—</div>
+        </div>
+        <div class="inv-table-wrap">
+          <div class="inv-table-scroll">
+            <table class="data-table" style="font-size:12px;" id="ac-articles-table">
+              <thead>
+                <tr>
+                  <th style="min-width:200px;">Article</th>
+                  <th>Catégorie</th>
+                  <th>Fournisseur</th>
+                  <th style="text-align:center;">Unité</th>
+                  <th class="num">PU HT</th>
+                  <th class="num">CUMP</th>
+                  <th style="text-align:center;">TVA achat</th>
+                  <th style="text-align:center;">Merc.</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="ac-articles-tbody">
+                <tr><td colspan="9" style="text-align:center;padding:48px;color:var(--gray-400);">Chargement…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prix irréguliers -->
+      <div class="ac-tabpane" id="ac-pane-prix">
+        <div id="ac-prix-content">
+          <div style="padding:48px;text-align:center;color:var(--gray-400);">Chargement…</div>
+        </div>
+      </div>
+
+      <!-- Catégories -->
+      <div class="ac-tabpane" id="ac-pane-categories">
+        <div id="ac-cat-content">
+          <div style="padding:48px;text-align:center;color:var(--gray-400);">Chargement…</div>
+        </div>
+      </div>
+
+      <!-- Fournisseurs -->
+      <div class="ac-tabpane" id="ac-pane-fournisseurs">
+        <div id="ac-four-content">
+          <div style="padding:48px;text-align:center;color:var(--gray-400);">Chargement…</div>
         </div>
       </div>
 
@@ -2700,14 +2812,15 @@
 
 <script>
 const MODULE_TITLES = {
-  recettes:     'Fiches techniques',
-  'fc-articles':'Articles leaders',
-  'fc-bons':    'Bons de livraison',
-  'fc-stock':   'Stock de clôture',
-  'fc-calcul':  'Flash Cost',
-  'fc-histo':   'Historique semaines',
-  inventaire:   'Inventaire',
-  dashboard:    'Tableau de bord'
+  recettes:          'Fiches techniques',
+  'articles-config': 'Articles & Configuration',
+  'fc-articles':     'Articles leaders',
+  'fc-bons':         'Bons de livraison',
+  'fc-stock':        'Stock de clôture',
+  'fc-calcul':       'Flash Cost',
+  'fc-histo':        'Historique semaines',
+  inventaire:        'Inventaire',
+  dashboard:         'Tableau de bord'
 };
 
 /* ── Sidebar v2 : navigation ───────────────────────────────── */
@@ -2749,6 +2862,10 @@ document.querySelectorAll('.nav-sub-item[data-module]').forEach(item => {
     const tab      = item.dataset.tab || null;
     _navSetActive(item);
     _navActivateModule(moduleId, tab);
+    // Modules avec sous-onglets dédiés
+    if (moduleId === 'articles-config' && tab && typeof switchACTab === 'function') {
+      switchACTab(tab);
+    }
   });
 });
 
