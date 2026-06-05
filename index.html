@@ -1464,6 +1464,90 @@
   .mt-md { margin-top: 16px; }
   .mb-md { margin-bottom: 16px; }
 
+  /* ===== SIDEBAR v2 — MarketMan inspired ===== */
+  .nav-group-hdr {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    color: var(--gray-700); font-weight: 600; font-size: 13px;
+    transition: all 0.12s;
+    user-select: none;
+    border-left: 3px solid transparent;
+  }
+  .nav-group-hdr:hover { background: var(--white); color: var(--gray-900); }
+  .nav-group.open > .nav-group-hdr { color: var(--phar-navy); }
+
+  .nav-gicon {
+    width: 28px; height: 28px;
+    border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    background: var(--gray-200);
+    color: var(--gray-500);
+    transition: all 0.15s;
+  }
+  .nav-gicon svg { width: 14px; height: 14px; stroke-width: 2; }
+  .nav-group-hdr:hover .nav-gicon { background: var(--phar-navy-faint); color: var(--phar-navy); }
+  .nav-group.open > .nav-group-hdr .nav-gicon { background: var(--phar-navy); color: var(--white); }
+
+  .nav-group-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .nav-garrow {
+    margin-left: auto; flex-shrink: 0;
+    color: var(--gray-300); transition: transform 0.2s ease;
+    display: flex; align-items: center;
+  }
+  .nav-garrow svg { width: 14px; height: 14px; stroke-width: 2.5; }
+  .nav-group.open > .nav-group-hdr .nav-garrow { transform: rotate(90deg); color: var(--phar-navy-light); }
+
+  .nav-sub-items { display: none; }
+  .nav-group.open > .nav-sub-items {
+    display: block;
+    border-bottom: 1px solid var(--gray-200);
+    padding-bottom: 4px;
+  }
+
+  .nav-sub-label {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--gray-400);
+    padding: 10px 16px 3px 52px;
+  }
+  .nav-sub-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px 8px 52px;
+    cursor: pointer; font-size: 12.5px; font-weight: 500;
+    color: var(--gray-600); transition: all 0.12s;
+    border-left: 3px solid transparent;
+  }
+  .nav-sub-item:hover { color: var(--gray-900); background: var(--white); }
+  .nav-sub-item.active {
+    color: var(--phar-navy); font-weight: 700;
+    border-left-color: var(--phar-navy);
+    background: var(--phar-navy-faint);
+  }
+
+  .nav-direct {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; cursor: pointer;
+    color: var(--gray-700); font-weight: 600; font-size: 13px;
+    border-left: 3px solid transparent; transition: all 0.12s;
+  }
+  .nav-direct:hover { background: var(--white); color: var(--gray-900); }
+  .nav-direct.active {
+    background: var(--white); color: var(--phar-navy);
+    border-left-color: var(--phar-navy); font-weight: 700;
+  }
+  .nav-direct.active .nav-gicon { background: var(--phar-navy); color: var(--white); }
+  .nav-direct:hover .nav-gicon { background: var(--phar-navy-faint); color: var(--phar-navy); }
+
+  /* Mobile sidebar collapse */
+  @media (max-width: 800px) {
+    .nav-group-label, .nav-garrow, .nav-sub-items,
+    .nav-sub-label, .nav-footer, .nav-direct > span:not(.nav-gicon) { display: none; }
+    .nav-group-hdr, .nav-direct { padding: 10px; justify-content: center; }
+    .nav-gicon { margin: 0; }
+  }
+
   /* ===== PRINT ===== */
   @media print {
     body { background: white; font-size: 12px; }
@@ -1583,39 +1667,96 @@
     </div>
   </header>
 
-  <!-- ===== SIDEBAR ===== -->
+  <!-- ===== SIDEBAR v2 ===== -->
   <aside>
-    <div class="nav-label">Modules</div>
-    <div class="nav-item active" data-module="recettes"><span class="nav-num">01</span><span>Recettes</span></div>
 
-    <div class="nav-divider" style="margin:8px 0 4px;"></div>
-    <div class="nav-label" style="color:var(--phar-navy);opacity:0.9;font-size:9px;">Flash Cost</div>
-    <div class="nav-item" data-module="fc-articles"><span class="nav-num">·1</span><span>Articles leaders</span></div>
-    <div class="nav-item" data-module="fc-bons"><span class="nav-num">·2</span><span>Bons de livraison</span></div>
-    <div class="nav-item" data-module="fc-stock"><span class="nav-num">·3</span><span>Stock de clôture</span></div>
-    <div class="nav-item" data-module="fc-calcul"><span class="nav-num">·4</span><span>Flash Cost</span></div>
-    <div class="nav-item" data-module="fc-histo"><span class="nav-num">·5</span><span>Historique</span></div>
-    <div class="nav-divider" style="margin:4px 0 8px;"></div>
+    <!-- Tableau de bord — standalone -->
+    <div class="nav-direct active" data-module="dashboard">
+      <div class="nav-gicon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </div>
+      <span class="nav-group-label">Tableau de bord</span>
+    </div>
 
-    <div class="nav-item" data-module="inventaire"><span class="nav-num">03</span><span>Inventaire</span></div>
-    <div class="nav-item" data-module="dashboard"><span class="nav-num">04</span><span>Dashboard</span></div>
-    <div class="nav-item" data-module="comparateur"><span class="nav-num">05</span><span>Comparateur</span></div>
+    <!-- ── Production ───────────────────────────────── -->
+    <div class="nav-group" id="navg-production">
+      <div class="nav-group-hdr" onclick="navToggleGroup('production')">
+        <div class="nav-gicon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <span class="nav-group-label">Production</span>
+        <span class="nav-garrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
+      <div class="nav-sub-items">
+        <div class="nav-sub-label">Cuisine</div>
+        <div class="nav-sub-item" data-module="recettes">Fiches techniques</div>
+        <div class="nav-sub-label">Paramétrage</div>
+        <div class="nav-sub-item" data-module="fc-articles">Articles leaders</div>
+      </div>
+    </div>
 
-    <div class="nav-divider"></div>
+    <!-- ── Achats ────────────────────────────────────── -->
+    <div class="nav-group open" id="navg-achats">
+      <div class="nav-group-hdr" onclick="navToggleGroup('achats')">
+        <div class="nav-gicon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        </div>
+        <span class="nav-group-label">Achats</span>
+        <span class="nav-garrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
+      <div class="nav-sub-items">
+        <div class="nav-sub-label">Passer &amp; recevoir</div>
+        <div class="nav-sub-item" data-module="fc-bons" data-tab="scan">Scanner un BL</div>
+        <div class="nav-sub-item" data-module="fc-bons" data-tab="bulletins">Historique BL</div>
+        <div class="nav-sub-label">Comptabilité</div>
+        <div class="nav-sub-item" data-module="fc-bons" data-tab="rapprochement">Factures / Rapprochement</div>
+        <div class="nav-sub-label">Flash Cost</div>
+        <div class="nav-sub-item" data-module="fc-calcul">Flash Cost hebdo</div>
+        <div class="nav-sub-item" data-module="fc-stock">Stock de clôture</div>
+        <div class="nav-sub-item" data-module="fc-histo">Historique semaines</div>
+      </div>
+    </div>
 
-    <div class="nav-label">Outils</div>
-    <div class="nav-item"><span class="nav-num">·</span><span>Catalogue</span></div>
-    <div class="nav-item"><span class="nav-num">·</span><span>Fournisseurs</span></div>
-    <div class="nav-item"><span class="nav-num">·</span><span>Rapports</span></div>
+    <!-- ── Inventaire ────────────────────────────────── -->
+    <div class="nav-group" id="navg-inventaire">
+      <div class="nav-group-hdr" onclick="navToggleGroup('inventaire')">
+        <div class="nav-gicon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+        </div>
+        <span class="nav-group-label">Actions d'inventaire</span>
+        <span class="nav-garrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
+      <div class="nav-sub-items">
+        <div class="nav-sub-label">Stock</div>
+        <div class="nav-sub-item" data-module="inventaire">Inventaire multi-POS</div>
+      </div>
+    </div>
 
-    <div class="nav-divider"></div>
+    <!-- ── Rapports ──────────────────────────────────── -->
+    <div class="nav-group" id="navg-rapports">
+      <div class="nav-group-hdr" onclick="navToggleGroup('rapports')">
+        <div class="nav-gicon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+        <span class="nav-group-label">Rapports</span>
+        <span class="nav-garrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
+      <div class="nav-sub-items">
+        <div class="nav-sub-label">Analyse</div>
+        <div class="nav-sub-item" onclick="fcOpenAnalytics()">Analyse &amp; Export</div>
+        <div class="nav-sub-item" onclick="openMovementsModal()">Journal des entrées</div>
+        <div class="nav-sub-label">Outils</div>
+        <div class="nav-sub-item" id="nav-catalogue">Catalogue articles</div>
+        <div class="nav-sub-item" id="nav-fournisseurs">Fournisseurs</div>
+      </div>
+    </div>
 
     <div class="nav-footer">
-      <strong style="color: var(--gray-700);">PHAR Cost v1.0</strong><br>
-      Spreading care.<br>
-      Empowering business.
+      <strong style="color:var(--gray-700);">PHAR Cost v1.0</strong><br>
+      Spreading care. Empowering business.
       <a href="#" class="nav-footer-link">Documentation →</a>
     </div>
+
   </aside>
 
   <!-- ===== MAIN ===== -->
@@ -2462,82 +2603,6 @@
 
     </section>
 
-    <!-- 05 · COMPARATEUR -->
-    <section class="module" id="module-comparateur">
-
-      <div class="module-header">
-        <div>
-          <div class="module-title-wrap">
-            <div class="module-kicker">05 · Cost Control</div>
-            <h1 class="module-title">Comparateur fournisseurs</h1>
-            <p class="module-subtitle">Comparaison automatique des listes de prix et arbitrage par Claude pour optimiser vos commandes.</p>
-          </div>
-        </div>
-        <div class="module-actions">
-          <button class="btn btn-outline btn-sm">Mes fournisseurs</button>
-          <button class="btn btn-primary btn-sm">+ Nouvelle comparaison</button>
-        </div>
-      </div>
-
-      <div class="section-bar">
-        <div class="section-bar-num">1</div>
-        <div class="section-bar-label">Sources de prix</div>
-        <div class="section-bar-line"></div>
-      </div>
-
-      <div class="card">
-        <div class="card-body">
-          <div class="supplier-grid">
-            <div class="supplier-card loaded">
-              <div class="supplier-card-name">Culture Food SA</div>
-              <div class="supplier-card-status">Liste S22 · 42 articles</div>
-            </div>
-            <div class="supplier-card loaded">
-              <div class="supplier-card-name">LéguRiviera</div>
-              <div class="supplier-card-status">Liste S22 · 38 articles</div>
-            </div>
-            <div class="supplier-card">
-              <div class="supplier-card-name" style="color: var(--gray-500);">+ Ajouter une source</div>
-              <div class="supplier-card-status">3ème fournisseur</div>
-            </div>
-          </div>
-          <div class="row" style="justify-content: flex-end; margin-top: 16px;">
-            <button class="btn btn-primary">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Lancer l'analyse comparative
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="section-bar">
-        <div class="section-bar-num">2</div>
-        <div class="section-bar-label">Résultats de la dernière analyse</div>
-        <div class="section-bar-line"></div>
-      </div>
-
-      <div class="kpi-grid">
-        <div class="kpi"><div class="kpi-corner"></div><div class="kpi-label">Articles comparés</div><div class="kpi-value">28</div><div class="kpi-foot">communs aux 2 fournisseurs</div></div>
-        <div class="kpi kpi-success"><div class="kpi-corner"></div><div class="kpi-label">Économie potentielle</div><div class="kpi-value">312 <small>CHF</small></div><div class="kpi-foot">sur la commande hebdo</div></div>
-        <div class="kpi kpi-primary"><div class="kpi-corner"></div><div class="kpi-label">Choix optimal</div><div class="kpi-value" style="font-size: 22px;">Culture Food</div><div class="kpi-foot">sur 18 articles · 64%</div></div>
-        <div class="kpi kpi-warning"><div class="kpi-corner"></div><div class="kpi-label">Hausses détectées</div><div class="kpi-value">4</div><div class="kpi-foot">vs semaine précédente</div></div>
-      </div>
-
-      <div class="empty">
-        <div class="empty-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><polyline points="7 14 12 9 15 12 22 5"/></svg>
-        </div>
-        <div class="empty-title">Comparateur Primeurs connecté</div>
-        <div class="empty-text">
-          L'analyse comparative détaillée Culture Food SA &times; LéguRiviera est disponible dans l'outil dédié, avec génération automatique des bons de commande par fournisseur.
-        </div>
-        <button class="btn btn-primary">
-          Ouvrir le comparateur Primeurs
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        </button>
-      </div>
-
-    </section>
 
   </main>
 
@@ -2635,26 +2700,91 @@
 
 <script>
 const MODULE_TITLES = {
-  recettes: 'Fiches techniques',
-  'fc-articles': 'Articles leaders',
-  'fc-bons': 'Bons de livraison',
-  'fc-stock': 'Stock de clôture',
-  'fc-calcul': 'Flash Cost',
-  'fc-histo': 'Historique',
-  inventaire: 'Inventaire',
-  dashboard: 'Dashboard',
-  comparateur: 'Comparateur fournisseurs'
+  recettes:     'Fiches techniques',
+  'fc-articles':'Articles leaders',
+  'fc-bons':    'Bons de livraison',
+  'fc-stock':   'Stock de clôture',
+  'fc-calcul':  'Flash Cost',
+  'fc-histo':   'Historique semaines',
+  inventaire:   'Inventaire',
+  dashboard:    'Tableau de bord'
 };
 
-document.querySelectorAll('.nav-item[data-module]').forEach(item => {
+/* ── Sidebar v2 : navigation ───────────────────────────────── */
+
+/** Active un module (section principale) sans changer la sidebar */
+function _navActivateModule(moduleId, tab) {
+  document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+  const mod = document.getElementById('module-' + moduleId);
+  if (mod) mod.classList.add('active');
+  const title = MODULE_TITLES[moduleId] || moduleId;
+  document.getElementById('breadcrumb-current').textContent = title;
+  document.querySelector('main').scrollTo({ top: 0, behavior: 'smooth' });
+  if (tab && typeof switchAchatsTab === 'function') switchAchatsTab(tab);
+}
+
+/** Active un sub-item visuellement */
+function _navSetActive(el) {
+  document.querySelectorAll('.nav-sub-item.active, .nav-direct.active').forEach(x => x.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+
+/** Ouvre/ferme un groupe d'accordéon */
+function navToggleGroup(groupId) {
+  const group = document.getElementById('navg-' + groupId);
+  if (!group) return;
+  group.classList.toggle('open');
+}
+
+/** Ouvre un groupe sans le fermer si déjà ouvert */
+function navOpenGroup(groupId) {
+  const group = document.getElementById('navg-' + groupId);
+  if (group) group.classList.add('open');
+}
+
+// ── Click listeners sur nav-sub-item avec data-module ──────────
+document.querySelectorAll('.nav-sub-item[data-module]').forEach(item => {
   item.addEventListener('click', () => {
     const moduleId = item.dataset.module;
-    document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
-    item.classList.add('active');
-    document.getElementById('module-' + moduleId).classList.add('active');
-    document.getElementById('breadcrumb-current').textContent = MODULE_TITLES[moduleId];
-    document.querySelector('main').scrollTo({ top: 0, behavior: 'smooth' });
+    const tab      = item.dataset.tab || null;
+    _navSetActive(item);
+    _navActivateModule(moduleId, tab);
+  });
+});
+
+// ── Click listeners sur nav-direct (Dashboard) ─────────────────
+document.querySelectorAll('.nav-direct[data-module]').forEach(item => {
+  item.addEventListener('click', () => {
+    const moduleId = item.dataset.module;
+    _navSetActive(item);
+    _navActivateModule(moduleId, null);
+    // Fermer tous les groupes ouverts visuellement
+    document.querySelectorAll('.nav-group').forEach(g => g.classList.remove('open'));
+  });
+});
+
+// ── Outils Rapports (catalogue, fournisseurs) ──────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const catBtn = document.getElementById('nav-catalogue');
+  if (catBtn) catBtn.addEventListener('click', () => {
+    const items = [...pharStores.food, ...pharStores.bev];
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Catalogue</title>
+    <style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px;}h1{color:#263B8B;}
+    table{width:100%;border-collapse:collapse;}th{background:#263B8B;color:white;padding:6px 10px;text-align:left;font-size:10px;text-transform:uppercase;}
+    td{padding:6px 10px;border-bottom:1px solid #F4F3F3;}@media print{@page{margin:12mm;}}</style>
+    </head><body><h1>Catalogue articles — PHAR Cost</h1>
+    <table><thead><tr><th>Article</th><th>Groupe</th><th>Fournisseur</th><th>Unité</th><th style="text-align:right">P.U.</th></tr></thead>
+    <tbody>${items.map(i=>`<tr><td>${i.article}</td><td>${i.groupe||i.categorie||''}</td><td>${i.fournisseur||''}</td><td>${i.unite||''}</td><td style="text-align:right;">${(i.pu||0).toFixed(2)} CHF</td></tr>`).join('')}</tbody></table>
+    <script>window.onload=()=>window.print();<\/script></body></html>`);
+    win.document.close();
+  });
+
+  const fouBtn = document.getElementById('nav-fournisseurs');
+  if (fouBtn) fouBtn.addEventListener('click', () => {
+    const list = [...new Set([...pharStores.food, ...pharStores.bev].map(i=>i.fournisseur).filter(Boolean))].sort();
+    if (typeof showToast === 'function') showToast(`${list.length} fournisseurs référencés.`, '');
+    alert(`Fournisseurs référencés (${list.length}) :\n\n${list.join('\n')}`);
   });
 });
 
@@ -4036,13 +4166,11 @@ function integrateBLToInventory() {
     renderBLRepository();
   }
 
-  // Bascule l'affichage sur l'inventaire pour montrer le résultat
-  document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
-  const navInv = document.querySelector('.nav-item[data-module="inventaire"]');
-  if (navInv) navInv.classList.add('active');
-  document.getElementById('module-inventaire').classList.add('active');
-  document.getElementById('breadcrumb-current').textContent = MODULE_TITLES.inventaire;
+  // Bascule sur l'inventaire pour montrer le résultat
+  const invItem = document.querySelector('.nav-sub-item[data-module="inventaire"]');
+  _navSetActive(invItem);
+  navOpenGroup('inventaire');
+  _navActivateModule('inventaire', null);
 
   // Affiche la mercuriale qui a reçu le plus de lignes
   const targetMerc = lines.filter(l => l.merc === 'bev').length > lines.filter(l => l.merc === 'food').length ? 'bev' : 'food';
@@ -4282,13 +4410,10 @@ function viewBL(blId) {
   const bl = pharBLs.find(b => b.id === blId);
   if (!bl) return;
   // Navigate to FC-2 module
-  document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
-  const nav = document.querySelector('.nav-item[data-module="fc-bons"]');
-  if (nav) nav.classList.add('active');
-  const mod = document.getElementById('module-fc-bons');
-  if (mod) mod.classList.add('active');
-  document.getElementById('breadcrumb-current').textContent = MODULE_TITLES['fc-bons'];
+  const blNavItem = document.querySelector('.nav-sub-item[data-module="fc-bons"][data-tab="bulletins"]');
+  _navSetActive(blNavItem);
+  navOpenGroup('achats');
+  _navActivateModule('fc-bons', null);
   switchAchatsTab('scan');
   document.getElementById('bl-scan-results').innerHTML = '';
   clearBLLog();
@@ -4632,30 +4757,7 @@ document.querySelectorAll('#module-recettes .module-actions .btn').forEach(btn =
   }
 });
 
-/* ============================================================
-   BOUTONS SIDEBAR OUTILS
-   ============================================================ */
-document.querySelectorAll('.nav-item:not([data-module])').forEach(item => {
-  const label = item.querySelector('span:last-child')?.textContent?.trim();
-  item.addEventListener('click', () => {
-    if (label === 'Catalogue') {
-      const items = [...pharStores.food, ...pharStores.bev];
-      const win = window.open('', '_blank');
-      win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Catalogue articles</title>
-      <style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px;}h1{color:#263B8B;}table{width:100%;border-collapse:collapse;}th{background:#263B8B;color:white;padding:6px 10px;text-align:left;font-size:10px;text-transform:uppercase;}td{padding:6px 10px;border-bottom:1px solid #F4F3F3;}@media print{@page{margin:12mm;}}</style>
-      </head><body><h1>Catalogue articles — PHAR Cost</h1>
-      <table><thead><tr><th>Article</th><th>Groupe</th><th>Fournisseur</th><th>Unité</th><th>P.U.</th></tr></thead>
-      <tbody>${items.map(i=>`<tr><td>${i.article}</td><td>${i.groupe||i.categorie||''}</td><td>${i.fournisseur||''}</td><td>${i.unite||''}</td><td style="text-align:right;">${(i.pu||0).toFixed(2)} CHF</td></tr>`).join('')}</tbody></table>
-      <script>window.onload=()=>window.print();<\/script></body></html>`);
-      win.document.close();
-    } else if (label === 'Fournisseurs') {
-      const suppliers = [...new Set([...pharStores.food, ...pharStores.bev].map(i => i.fournisseur).filter(Boolean))].sort();
-      alert(`Fournisseurs référencés (${suppliers.length}) :\n\n` + suppliers.join('\n'));
-    } else if (label === 'Rapports') {
-      showToast('Module Rapports — disponible dans la prochaine version.', '');
-    }
-  });
-});
+/* Outils sidebar — gérés dans le bloc DOMContentLoaded ci-dessus */
 
 /* ============================================================
    BOUTONS DASHBOARD — Alertes
@@ -4668,11 +4770,9 @@ document.querySelectorAll('#module-dashboard .alert .btn').forEach(btn => {
     } else if (title?.includes('Beverage')) {
       alert('Beverage cost au-dessus de la cible\n\n• Coût actuel : 22.8% vs cible 20%\n• Écart : +2.8pt\n\nActions suggérées :\n1. Vérifier les pertes au bar lobby\n2. Contrôler les comptages d\'inventaire de fin de service\n3. Auditer les recettes cocktails');
     } else if (title?.includes('Inventaire piscine')) {
-      document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
-      document.querySelector('.nav-item[data-module="inventaire"]').classList.add('active');
-      document.getElementById('module-inventaire').classList.add('active');
-      document.getElementById('breadcrumb-current').textContent = MODULE_TITLES.inventaire;
+      const invItem = document.querySelector('.nav-sub-item[data-module="inventaire"]');
+      if (invItem) { _navSetActive(invItem); navOpenGroup('inventaire'); }
+      _navActivateModule('inventaire', null);
       showToast('Reprise de l\'inventaire en cours…', '');
     }
   });

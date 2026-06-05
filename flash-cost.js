@@ -2086,6 +2086,13 @@ function _fcInjectAnalyticsModal() {
 fcLoad();
 injectFCModals();
 _fcInjectAnalyticsModal();
+
+// Activer le module de démarrage (Dashboard)
+(function() {
+  _navActivateModule('dashboard', null);
+  const dashItem = document.querySelector('.nav-direct[data-module="dashboard"]');
+  if (dashItem && typeof _navSetActive === 'function') _navSetActive(dashItem);
+})();
 renderFC1();
 renderFC2BLRapprochement();
 renderFC3();
