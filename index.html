@@ -3594,7 +3594,8 @@ const POS_COLORS = ['#263B8B', '#3A4FA8', '#2D7A4F', '#C68A1A', '#6B5BCC', '#B23
 const LS_KEYS = {
   stores: 'phar_inventory_stores_v1',
   movements: 'phar_stock_movements_v1',
-  bls: 'phar_bls_v1'
+  bls: 'phar_bls_v1',
+  fournisseurs: 'phar_fournisseurs_v1'
 };
 
 // Garantit que chaque article porte les champs de cost control
@@ -3608,7 +3609,7 @@ function ensureCostFields(item) {
 
 // Charge les stores depuis localStorage, sinon initialise depuis les mercuriales MONA
 function loadStores() {
-  let stores = null, movements = [], bls = [];
+  let stores = null, movements = [], bls = [], fournisseurs = [];
   try {
     const rawS = localStorage.getItem(LS_KEYS.stores);
     if (rawS) stores = JSON.parse(rawS);
@@ -3616,9 +3617,11 @@ function loadStores() {
     if (rawM) movements = JSON.parse(rawM);
     const rawB = localStorage.getItem(LS_KEYS.bls);
     if (rawB) bls = JSON.parse(rawB);
+    const rawF = localStorage.getItem(LS_KEYS.fournisseurs);
+    if (rawF) fournisseurs = JSON.parse(rawF);
   } catch (e) {
     console.warn('PHAR · lecture localStorage impossible, réinitialisation', e);
-    stores = null; movements = []; bls = [];
+    stores = null; movements = []; bls = []; fournisseurs = [];
   }
   if (!stores || !stores.food || !stores.bev) {
     stores = {
@@ -3629,7 +3632,8 @@ function loadStores() {
   stores.food.forEach(ensureCostFields);
   stores.bev.forEach(ensureCostFields);
   if (!Array.isArray(bls)) bls = [];
-  return { stores, movements, bls };
+  if (!Array.isArray(fournisseurs)) fournisseurs = [];
+  return { stores, movements, bls, fournisseurs };
 }
 
 // Persiste les deux mercuriales + le journal des mouvements
@@ -3638,6 +3642,7 @@ function saveStores() {
     localStorage.setItem(LS_KEYS.stores, JSON.stringify(pharStores));
     localStorage.setItem(LS_KEYS.movements, JSON.stringify(stockMovements));
     localStorage.setItem(LS_KEYS.bls, JSON.stringify(pharBLs));
+    if (typeof pharFournisseurs !== 'undefined') localStorage.setItem(LS_KEYS.fournisseurs, JSON.stringify(pharFournisseurs));
     return true;
   } catch (e) {
     console.error('PHAR · échec sauvegarde localStorage', e);
@@ -3650,6 +3655,7 @@ const _loaded = loadStores();
 const pharStores = _loaded.stores;
 let stockMovements = _loaded.movements;
 let pharBLs = _loaded.bls;
+let pharFournisseurs = _loaded.fournisseurs;
 
 let currentMercuriale = 'food';
 let inventoryData = pharStores.food; // référence directe vers le store actif

@@ -3041,36 +3041,77 @@ function acDeleteCustomCat(name) {
 function acRenderFournisseurs() {
   const el = document.getElementById('ac-four-content');
   if (!el) return;
-  const all = acGetAllArticles();
-  const map = {};
-  all.forEach(a => {
-    const f = a.fournisseur || 'Non renseigné';
-    if (!map[f]) map[f] = { f, nb:0, cats:new Set(), pu_total:0 };
-    map[f].nb++;
-    map[f].cats.add(a._ac_cat || fcAutoCategory(a.article));
-    map[f].pu_total += a.pu;
-  });
-  const list = Object.values(map).sort((a,b)=>b.nb-a.nb);
 
-  const rows = list.map((r,i) => `
-    <tr>
-      <td style="color:var(--gray-400);font-size:11px;">${i+1}</td>
-      <td style="font-weight:700;">${r.f}</td>
-      <td class="num">${r.nb}</td>
-      <td style="font-size:11px;color:var(--gray-500);">${[...r.cats].join(', ')}</td>
-    </tr>`).join('');
+  // Statistiques d'articles par fournisseur (depuis les mercuriales)
+  const all = (typeof acGetAllArticles === 'function') ? acGetAllArticles() : [];
+  const stats = {};
+  all.forEach(a => {
+    const f = (a.fournisseur || '').trim() || 'Non renseigné';
+    if (!stats[f]) stats[f] = { nb: 0, cats: new Set() };
+    stats[f].nb++;
+    stats[f].cats.add(a._ac_cat || (typeof fcAutoCategory === 'function' ? fcAutoCategory(a.article) : 'Autres'));
+  });
+  const statFor = nom => stats[(nom || '').trim()] || { nb: 0, cats: new Set() };
+
+  const configured = acGetConfiguredFournisseurs();
+  const configuredNames = new Set(configured.map(f => (f.nom || '').trim().toLowerCase()));
+
+  const confRows = configured.map(f => {
+    const st = statFor(f.nom);
+    const hasRab = (parseFloat(f.rabais_val) || 0) > 0;
+    return `<tr>
+      <td><input type="text" value="${(f.nom || '').replace(/"/g, '&quot;')}" onchange="acUpdateFournisseur('${f.id}','nom',this.value)" style="font-weight:700;border:1px solid var(--gray-200);background:var(--white);padding:4px 6px;border-radius:3px;min-width:160px;width:100%;"></td>
+      <td style="white-space:nowrap;">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;">
+          <input type="number" value="${parseFloat(f.rabais_val) || 0}" step="0.01" min="0" onchange="acUpdateFournisseur('${f.id}','rabais_val',this.value)" style="width:60px;height:28px;box-sizing:border-box;text-align:right;${hasRab ? 'color:var(--phar-navy);font-weight:700;' : ''}">
+          <select onchange="acUpdateFournisseur('${f.id}','rabais_type',this.value)" style="width:56px;height:28px;box-sizing:border-box;font-size:11px;border:1px solid var(--gray-200);border-radius:3px;">
+            <option value="pct" ${f.rabais_type !== 'chf' ? 'selected' : ''}>%</option>
+            <option value="chf" ${f.rabais_type === 'chf' ? 'selected' : ''}>CHF</option>
+          </select>
+        </div>
+      </td>
+      <td><input type="text" value="${(f.notes || '').replace(/"/g, '&quot;')}" placeholder="conditions, contact, délai…" onchange="acUpdateFournisseur('${f.id}','notes',this.value)" style="font-size:11px;border:1px solid var(--gray-200);background:var(--white);padding:4px 6px;border-radius:3px;width:100%;min-width:150px;color:var(--gray-600);"></td>
+      <td class="num">${st.nb}</td>
+      <td style="text-align:center;"><button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:2px 8px;" title="Supprimer" onclick="acDeleteFournisseur('${f.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  const known = (typeof acGetKnownFournisseurNames === 'function') ? acGetKnownFournisseurNames() : [];
+  const unconfigured = known.filter(n => n && n.toLowerCase() !== 'non renseigné' && !configuredNames.has(n.toLowerCase()));
+  const unconfRows = unconfigured.map(n => {
+    const st = statFor(n);
+    return `<tr>
+      <td style="font-weight:600;color:var(--gray-600);">${n}</td>
+      <td class="num">${st.nb}</td>
+      <td style="text-align:right;"><button class="btn btn-outline btn-sm" onclick="acAddFournisseur('${(n || '').replace(/'/g, "\\'")}')">+ Configurer une condition</button></td>
+    </tr>`;
+  }).join('');
 
   el.innerHTML = `
-    <div class="card" style="padding:0;">
-      <div class="card-header">
-        <div class="card-title">Fournisseurs référencés</div>
-        <div class="card-hint">${list.length} fournisseurs · ${all.length} articles</div>
+    <div class="card" style="padding:0;margin-bottom:16px;">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+          <div class="card-title">Fournisseurs &amp; conditions</div>
+          <div class="card-hint">Définissez un rabais par défaut (ex. 4% sur Fideco) — appliqué automatiquement aux BL de ce fournisseur.</div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="acAddFournisseur()">+ Ajouter un fournisseur</button>
       </div>
       <table class="data-table" style="font-size:13px;">
-        <thead><tr><th>#</th><th>Fournisseur</th><th class="num">Articles</th><th>Catégories servies</th></tr></thead>
-        <tbody>${rows}</tbody>
+        <thead><tr><th>Fournisseur</th><th class="num">Rabais par défaut</th><th>Notes / conditions</th><th class="num">Articles</th><th></th></tr></thead>
+        <tbody>${confRows || `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--gray-400);">Aucun fournisseur configuré. Ajoutez-en un, ou configurez-en un depuis la liste détectée ci-dessous.</td></tr>`}</tbody>
       </table>
-    </div>`;
+    </div>
+    ${unconfigured.length ? `
+    <div class="card" style="padding:0;">
+      <div class="card-header">
+        <div class="card-title">Fournisseurs détectés (non configurés)</div>
+        <div class="card-hint">${unconfigured.length} fournisseur(s) présents dans vos articles / BL sans condition définie.</div>
+      </div>
+      <table class="data-table" style="font-size:13px;">
+        <thead><tr><th>Fournisseur</th><th class="num">Articles</th><th></th></tr></thead>
+        <tbody>${unconfRows}</tbody>
+      </table>
+    </div>` : ''}`;
 }
 
 /* ─── Init ───────────────────────────────────────────────────── */
@@ -3272,12 +3313,14 @@ function _blCardInnerHTML(bl) {
       <td class="num"><input type="number" value="${parseFloat(a.quantite) || 0}" step="0.01" min="0" onchange="_blEditArticle('${bl.id}',${idx},'quantite',this.value)" style="width:62px;text-align:right;"></td>
       <td><input type="text" value="${(a.unite || '').replace(/"/g, '&quot;')}" onchange="_blEditArticle('${bl.id}',${idx},'unite',this.value)" style="width:60px;font-size:11px;"></td>
       <td class="num"><input type="number" value="${parseFloat(a.prix_brut_unitaire_ht) || 0}" step="0.01" min="0" onchange="_blEditArticle('${bl.id}',${idx},'prix_brut_unitaire_ht',this.value)" style="width:74px;text-align:right;font-weight:600;"></td>
-      <td class="num" style="white-space:nowrap;">
-        <input type="number" value="${parseFloat(a.rabais_val) || 0}" step="0.01" min="0" onchange="_blEditArticle('${bl.id}',${idx},'rabais_val',this.value)" style="width:50px;text-align:right;${hasRab ? 'color:var(--danger);font-weight:700;' : ''}">
-        <select onchange="_blEditArticle('${bl.id}',${idx},'rabais_type',this.value)" style="font-size:11px;padding:2px;border:1px solid var(--gray-200);border-radius:3px;">
-          <option value="pct" ${a.rabais_type !== 'chf' ? 'selected' : ''}>%</option>
-          <option value="chf" ${a.rabais_type === 'chf' ? 'selected' : ''}>CHF</option>
-        </select>
+      <td style="white-space:nowrap;">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;">
+          <input type="number" value="${parseFloat(a.rabais_val) || 0}" step="0.01" min="0" onchange="_blEditArticle('${bl.id}',${idx},'rabais_val',this.value)" style="width:48px;height:26px;box-sizing:border-box;text-align:right;${hasRab ? 'color:var(--danger);font-weight:700;' : ''}">
+          <select onchange="_blEditArticle('${bl.id}',${idx},'rabais_type',this.value)" style="width:52px;height:26px;box-sizing:border-box;font-size:11px;padding:2px 4px;border:1px solid var(--gray-200);border-radius:3px;">
+            <option value="pct" ${a.rabais_type !== 'chf' ? 'selected' : ''}>%</option>
+            <option value="chf" ${a.rabais_type === 'chf' ? 'selected' : ''}>CHF</option>
+          </select>
+        </div>
       </td>
       <td class="num" style="font-variant-numeric:tabular-nums;${hasRab ? 'color:var(--phar-navy);font-weight:700;' : 'color:var(--gray-500);'}">${_n2(a.prix_unitaire_ht)}</td>
       <td class="num" style="font-weight:700;font-variant-numeric:tabular-nums;">${_n2(a.total_ht)}</td>
@@ -3301,7 +3344,9 @@ function _blCardInnerHTML(bl) {
         <h3 style="${isMkt ? 'color:var(--phar-navy);' : ''}">${headerIcon}${titleTxt}</h3>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
           <label style="font-size:10px;color:var(--gray-500);display:flex;flex-direction:column;gap:2px;">FOURNISSEUR
-            <input type="text" value="${(bl.fournisseur || '').replace(/"/g, '&quot;')}" onchange="_blEditMeta('${bl.id}','fournisseur',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:3px;min-width:150px;">
+            <select onchange="_blSelectFournisseur('${bl.id}',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:3px;min-width:170px;">
+              ${_blFournisseurOptions(bl.fournisseur)}
+            </select>
           </label>
           <label style="font-size:10px;color:var(--gray-500);display:flex;flex-direction:column;gap:2px;">N° DOCUMENT
             <input type="text" value="${(bl.numero || '').replace(/"/g, '&quot;')}" onchange="_blEditMeta('${bl.id}','numero',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:3px;width:130px;font-family:monospace;">
@@ -3328,8 +3373,8 @@ function _blCardInnerHTML(bl) {
             <td colspan="6" style="padding:8px 12px;">
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                 <span style="font-weight:700;color:var(--phar-navy);">Rabais global BL :</span>
-                <input type="number" value="${parseFloat(bl.rabais_global_val) || 0}" step="0.01" min="0" onchange="_blEditMeta('${bl.id}','rabais_global_val',this.value)" style="width:62px;text-align:right;${gRabActive ? 'color:var(--danger);font-weight:700;' : ''}">
-                <select onchange="_blEditMeta('${bl.id}','rabais_global_type',this.value)" style="font-size:11px;padding:2px;border:1px solid var(--gray-200);border-radius:3px;">
+                <input type="number" value="${parseFloat(bl.rabais_global_val) || 0}" step="0.01" min="0" onchange="_blEditMeta('${bl.id}','rabais_global_val',this.value)" style="width:60px;height:28px;box-sizing:border-box;text-align:right;${gRabActive ? 'color:var(--danger);font-weight:700;' : ''}">
+                <select onchange="_blEditMeta('${bl.id}','rabais_global_type',this.value)" style="width:56px;height:28px;box-sizing:border-box;font-size:11px;padding:2px 4px;border:1px solid var(--gray-200);border-radius:3px;">
                   <option value="pct" ${bl.rabais_global_type !== 'chf' ? 'selected' : ''}>%</option>
                   <option value="chf" ${bl.rabais_global_type === 'chf' ? 'selected' : ''}>CHF</option>
                 </select>
@@ -3360,6 +3405,11 @@ function _blRerenderCard(blId) {
 
 function renderEditableBLCard(bl) {
   if (!bl) return;
+  // Applique une seule fois la condition de rabais du fournisseur configuré (si aucun rabais global encore saisi)
+  if (!bl._four_cond_applied) {
+    _blApplyFournisseurCondition(bl, false);
+    bl._four_cond_applied = true;
+  }
   _blRecomputeNet(bl);
   const container = document.getElementById('bl-scan-results');
   if (!container) return;
@@ -3376,3 +3426,128 @@ function renderEditableBLCard(bl) {
 
 /* Override : la carte d'import éditable remplace le rendu précédent */
 window.renderScanResultCard = function (bl) { renderEditableBLCard(bl); };
+
+/* ════════════════════════════════════════════════════════════════
+   FOURNISSEURS CONFIGURÉS + CONDITIONS DE RABAIS
+   • Store persistant pharFournisseurs (phar_fournisseurs_v1)
+   • Onglet Achats → Fournisseurs : CRUD + rabais par défaut
+   • Liste déroulante fournisseur dans la carte BL + application auto
+   ════════════════════════════════════════════════════════════════ */
+
+function acGetConfiguredFournisseurs() {
+  return (typeof pharFournisseurs !== 'undefined' && Array.isArray(pharFournisseurs)) ? pharFournisseurs : [];
+}
+
+function acFindFournisseur(nom) {
+  if (!nom) return null;
+  const n = String(nom).trim().toLowerCase();
+  return acGetConfiguredFournisseurs().find(f => String(f.nom || '').trim().toLowerCase() === n) || null;
+}
+
+/** Union des noms de fournisseurs : configurés + vus dans articles + vus dans BL */
+function acGetKnownFournisseurNames() {
+  const map = new Map(); // clé minuscule -> libellé affiché
+  acGetConfiguredFournisseurs().forEach(f => { const d = (f.nom || '').trim(); if (d) map.set(d.toLowerCase(), d); });
+  if (typeof acGetAllArticles === 'function') {
+    acGetAllArticles().forEach(a => { const d = (a.fournisseur || '').trim(); if (d) map.set(d.toLowerCase(), d); });
+  }
+  (typeof pharBLs !== 'undefined' ? pharBLs : []).forEach(b => {
+    const d = (b.fournisseur || '').trim(); if (d) map.set(d.toLowerCase(), d);
+    (b.articles || []).forEach(l => {
+      const fl = (l.fournisseur_ligne || '').trim();
+      if (fl && fl !== 'PHAR Marketplace') map.set(fl.toLowerCase(), fl);
+    });
+  });
+  return Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'fr'));
+}
+
+function acAddFournisseur(nom) {
+  if (typeof pharFournisseurs === 'undefined') return;
+  const name = (typeof nom === 'string' ? nom : '').trim();
+  if (name && acFindFournisseur(name)) {
+    if (typeof showToast === 'function') showToast('Ce fournisseur est déjà configuré.', '');
+    return;
+  }
+  pharFournisseurs.push({
+    id: 'four_' + Math.random().toString(36).slice(2, 9),
+    nom: name || 'Nouveau fournisseur',
+    rabais_type: 'pct', rabais_val: 0, notes: ''
+  });
+  if (typeof saveStores === 'function') saveStores();
+  acRenderFournisseurs();
+}
+
+function acUpdateFournisseur(id, field, value) {
+  const f = acGetConfiguredFournisseurs().find(x => x.id === id);
+  if (!f) return;
+  if (field === 'rabais_val') f.rabais_val = parseFloat(value) || 0;
+  else if (field === 'rabais_type') f.rabais_type = value === 'chf' ? 'chf' : 'pct';
+  else f[field] = value; // nom / notes
+  if (typeof saveStores === 'function') saveStores();
+  // Re-render uniquement pour les champs de rabais (sinon on perd le focus de saisie texte)
+  if (field === 'rabais_val' || field === 'rabais_type') acRenderFournisseurs();
+}
+
+function acDeleteFournisseur(id) {
+  if (typeof pharFournisseurs === 'undefined') return;
+  const f = pharFournisseurs.find(x => x.id === id);
+  if (f && typeof confirm === 'function' && !confirm(`Supprimer le fournisseur « ${f.nom} » et sa condition de rabais ?`)) return;
+  const i = pharFournisseurs.findIndex(x => x.id === id);
+  if (i >= 0) pharFournisseurs.splice(i, 1);
+  if (typeof saveStores === 'function') saveStores();
+  acRenderFournisseurs();
+}
+
+/* ─── Liste déroulante fournisseur dans la carte BL ─── */
+
+function _blFournisseurOptions(current) {
+  const names = acGetKnownFournisseurNames();
+  const cur = (current || '').trim();
+  if (cur && !names.some(n => n.toLowerCase() === cur.toLowerCase())) names.unshift(cur);
+  let opts = `<option value="" ${!cur ? 'selected' : ''}>— Choisir un fournisseur —</option>`;
+  opts += names.map(n => {
+    const sup = acFindFournisseur(n);
+    const cond = sup && (parseFloat(sup.rabais_val) || 0) > 0
+      ? ` (−${sup.rabais_val}${sup.rabais_type === 'chf' ? ' CHF' : '%'})` : '';
+    const sel = cur && n.toLowerCase() === cur.toLowerCase() ? 'selected' : '';
+    return `<option value="${n.replace(/"/g, '&quot;')}" ${sel}>${n}${cond}</option>`;
+  }).join('');
+  opts += `<option value="__new__">+ Autre fournisseur…</option>`;
+  return opts;
+}
+
+function _blSelectFournisseur(blId, value) {
+  const bl = _blFind(blId);
+  if (!bl) return;
+  if (value === '__new__') {
+    const nom = (typeof prompt === 'function') ? prompt('Nom du nouveau fournisseur :', '') : '';
+    if (nom && nom.trim()) bl.fournisseur = nom.trim();
+    // sinon on garde l'ancienne valeur (le re-render rétablit le select)
+  } else {
+    bl.fournisseur = value;
+  }
+  const applied = _blApplyFournisseurCondition(bl, true);
+  bl._four_cond_applied = true;
+  _blRecomputeNet(bl);
+  if (typeof saveStores === 'function') saveStores();
+  _blRerenderCard(blId);
+  if (typeof renderBLRepository === 'function') renderBLRepository();
+  if (applied && typeof showToast === 'function') {
+    const sup = acFindFournisseur(bl.fournisseur);
+    showToast(`Condition « ${bl.fournisseur} » appliquée : rabais ${sup.rabais_val}${sup.rabais_type === 'chf' ? ' CHF' : '%'}`, 'success');
+  }
+}
+
+/** Applique la condition de rabais d'un fournisseur configuré au rabais global du BL.
+ *  force=false : n'applique que si aucun rabais global n'est déjà saisi. */
+function _blApplyFournisseurCondition(bl, force) {
+  if (!bl) return false;
+  const sup = acFindFournisseur(bl.fournisseur);
+  if (!sup) return false;
+  const val = parseFloat(sup.rabais_val) || 0;
+  if (val <= 0) return false;
+  if (!force && (parseFloat(bl.rabais_global_val) || 0) > 0) return false;
+  bl.rabais_global_type = sup.rabais_type === 'chf' ? 'chf' : 'pct';
+  bl.rabais_global_val = val;
+  return true;
+}
