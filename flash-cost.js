@@ -2386,12 +2386,17 @@ function importPHARMarketplace() {
         if (typeof blLog === 'function')
           blLog(`  ✓ ${parsed.articles.length} article(s) · N° ${parsed.numero} · ${parsed.date} · ${parsed.total_ht.toFixed(2)} CHF HT`, 'ok');
 
-        // Persiste dans pharBLs (réutilise la logique existante)
+        // Persiste dans pharBLs + initialise le modèle net/rabais + carte éditable
+        let _blMkt = null;
         if (typeof persistScannedBL === 'function') {
-          persistScannedBL(parsed, file.name);
+          _blMkt = persistScannedBL(parsed, file.name);
         }
-        // Affiche la carte résultat enrichie
-        _renderPHARMarketplaceCard(parsed);
+        if (_blMkt) {
+          if (typeof _blRecomputeNet === 'function') _blRecomputeNet(_blMkt);
+          if (typeof saveStores === 'function') saveStores();
+          if (typeof renderEditableBLCard === 'function') renderEditableBLCard(_blMkt);
+          else if (typeof _renderPHARMarketplaceCard === 'function') _renderPHARMarketplaceCard(parsed);
+        }
         ok++;
       } catch (err) {
         if (typeof blLog === 'function')
@@ -3099,3 +3104,275 @@ renderFC4();
 renderFC5();
 fcPopulateConsolidePickers();
 _fcRefreshFacturesList();
+
+/* ════════════════════════════════════════════════════════════════
+   BL ÉDITABLES + RABAIS (par article / par BL) — étape import / scan
+   ----------------------------------------------------------------
+   • Carte d'import éditable (méta + lignes) — scan IA ET PHAR Marketplace
+   • Rabais par article (% ou CHF) + rabais global BL (% ou CHF, prorata)
+   • prix_unitaire_ht = PRIX NET (réellement payé) → CUMP, comparateur,
+     cumul achats et rapprochement utilisent tous le net automatiquement.
+   • prix_brut_unitaire_ht conservé pour traçabilité / ré-édition.
+   Cette section remplace l'usage des anciens renderScanResultCard /
+   _renderPHARMarketplaceCard (conservés mais désormais inutilisés).
+   ════════════════════════════════════════════════════════════════ */
+
+function _blFind(id) {
+  return (typeof pharBLs !== 'undefined' ? pharBLs : []).find(b => b.id === id) || null;
+}
+
+/* Moteur de recalcul net : rabais par ligne, puis rabais global au prorata */
+function _blRecomputeNet(bl) {
+  if (!bl || !Array.isArray(bl.articles)) return;
+
+  // 1) Rabais par ligne → sous-total
+  let subtotal = 0;
+  bl.articles.forEach(a => {
+    const qte = parseFloat(a.quantite) || 0;
+    if (a.prix_brut_unitaire_ht == null) a.prix_brut_unitaire_ht = parseFloat(a.prix_unitaire_ht) || 0;
+    const brut = parseFloat(a.prix_brut_unitaire_ht) || 0;
+    a.prix_brut_unitaire_ht = brut;
+    a.rabais_type = (a.rabais_type === 'chf') ? 'chf' : 'pct';
+    a.rabais_val  = parseFloat(a.rabais_val) || 0;
+
+    const lineBrut = qte * brut;
+    let disc = a.rabais_type === 'pct' ? lineBrut * a.rabais_val / 100 : a.rabais_val;
+    if (disc < 0) disc = 0;
+    if (disc > lineBrut) disc = lineBrut;
+    a._afterLine = lineBrut - disc;
+    subtotal += a._afterLine;
+  });
+
+  // 2) Rabais global → montant à répartir
+  bl.rabais_global_type = (bl.rabais_global_type === 'chf') ? 'chf' : 'pct';
+  bl.rabais_global_val  = parseFloat(bl.rabais_global_val) || 0;
+  let globalDisc = bl.rabais_global_type === 'pct'
+    ? subtotal * bl.rabais_global_val / 100
+    : bl.rabais_global_val;
+  if (globalDisc < 0) globalDisc = 0;
+  if (globalDisc > subtotal) globalDisc = subtotal;
+
+  // 3) Finalisation des lignes (prorata) + totaux
+  let totHT = 0, totTVA = 0, totBrut = 0;
+  bl.articles.forEach(a => {
+    const qte   = parseFloat(a.quantite) || 0;
+    const share = subtotal > 0 ? (a._afterLine / subtotal) * globalDisc : 0;
+    const net   = Math.max(0, a._afterLine - share);
+
+    a.total_ht             = parseFloat(net.toFixed(2));
+    a.prix_unitaire_ht     = qte > 0 ? parseFloat((net / qte).toFixed(6)) : 0; // PRIX NET canonique
+    a.prix_net_unitaire_ht = a.prix_unitaire_ht;
+
+    const cat = a.categorie_suggeree
+      || (typeof fcAutoCategory === 'function' ? fcAutoCategory(a.designation || '') : 'Autres');
+    const tva = typeof fcAutoTVA === 'function' ? fcAutoTVA(a.designation || '', cat) : 2.6;
+    a.tva_pct = tva;
+
+    totHT   += net;
+    totTVA  += net * tva / 100;
+    totBrut += qte * (parseFloat(a.prix_brut_unitaire_ht) || 0);
+    delete a._afterLine;
+  });
+
+  bl.total_ht      = parseFloat(totHT.toFixed(2));
+  bl.total_tva     = parseFloat(totTVA.toFixed(2));
+  bl.total_ttc     = parseFloat((totHT + totTVA).toFixed(2));
+  bl.total_brut_ht = parseFloat(totBrut.toFixed(2));
+  bl.total_rabais  = parseFloat((totBrut - totHT).toFixed(2));
+}
+
+/* ─── Handlers d'édition (appelés depuis les onchange inline) ─── */
+
+function _blEditArticle(blId, idx, field, value) {
+  const bl = _blFind(blId);
+  if (!bl || !bl.articles || !bl.articles[idx]) return;
+  const a = bl.articles[idx];
+  if (field === 'quantite' || field === 'prix_brut_unitaire_ht' || field === 'rabais_val') {
+    a[field] = parseFloat(value) || 0;
+  } else if (field === 'rabais_type') {
+    a.rabais_type = value === 'chf' ? 'chf' : 'pct';
+  } else {
+    a[field] = value; // designation, unite, ref, categorie_suggeree
+  }
+  _blRecomputeNet(bl);
+  if (typeof saveStores === 'function') saveStores();
+  _blRerenderCard(blId);
+  if (typeof renderBLRepository === 'function') renderBLRepository();
+}
+
+function _blEditMeta(blId, field, value) {
+  const bl = _blFind(blId);
+  if (!bl) return;
+  if (field === 'rabais_global_val') {
+    bl.rabais_global_val = parseFloat(value) || 0;
+    _blRecomputeNet(bl);
+    _blRerenderCard(blId);
+  } else if (field === 'rabais_global_type') {
+    bl.rabais_global_type = value === 'chf' ? 'chf' : 'pct';
+    _blRecomputeNet(bl);
+    _blRerenderCard(blId);
+  } else {
+    bl[field] = value; // fournisseur / numero / date : pas de re-render (conserve le focus)
+  }
+  if (typeof saveStores === 'function') saveStores();
+  if (typeof renderBLRepository === 'function') renderBLRepository();
+}
+
+function _blRemoveArticle(blId, idx) {
+  const bl = _blFind(blId);
+  if (!bl || !bl.articles) return;
+  if ((bl.articles.length || 0) <= 1) {
+    if (typeof showToast === 'function') showToast('Un BL doit conserver au moins une ligne.', 'error');
+    return;
+  }
+  bl.articles.splice(idx, 1);
+  _blRecomputeNet(bl);
+  if (typeof saveStores === 'function') saveStores();
+  _blRerenderCard(blId);
+  if (typeof renderBLRepository === 'function') renderBLRepository();
+}
+
+function _blAddArticle(blId) {
+  const bl = _blFind(blId);
+  if (!bl) return;
+  if (!Array.isArray(bl.articles)) bl.articles = [];
+  bl.articles.push({
+    ref: '', designation: 'Nouvel article', quantite: 1, unite: 'pce',
+    prix_brut_unitaire_ht: 0, prix_unitaire_ht: 0,
+    rabais_type: 'pct', rabais_val: 0, categorie_suggeree: 'Autres'
+  });
+  _blRecomputeNet(bl);
+  if (typeof saveStores === 'function') saveStores();
+  _blRerenderCard(blId);
+}
+
+/* ─── Rendu de la carte éditable ─── */
+
+function _blCardInnerHTML(bl) {
+  const _n2  = v => (parseFloat(v) || 0).toFixed(2);
+  const cats = (typeof getAllCategories === 'function' ? getAllCategories() : ['Autres']);
+  const isMkt = bl.source === 'phar_marketplace';
+
+  const rows = (bl.articles || []).map((a, idx) => {
+    const cat = a.categorie_suggeree
+      || (typeof fcAutoCategory === 'function' ? fcAutoCategory(a.designation || '') : 'Autres');
+    const tva = a.tva_pct != null ? a.tva_pct
+      : (typeof fcAutoTVA === 'function' ? fcAutoTVA(a.designation || '', cat) : 2.6);
+    const catOpts = cats.map(c => `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`).join('');
+    const sub = (a.units_per_uv ? `${a.units_per_uv} pcs · ${_n2(a.prix_base_piece)} CHF/pce` : '')
+      + (a.fournisseur_ligne && a.fournisseur_ligne !== 'PHAR Marketplace'
+        ? `${a.units_per_uv ? ' · ' : ''}via ${a.fournisseur_ligne}` : '');
+    const hasRab = (parseFloat(a.rabais_val) || 0) > 0;
+    return `<tr id="bl-art-row-${bl.id}-${idx}">
+      <td><input type="text" value="${(a.ref || '').replace(/"/g, '&quot;')}" onchange="_blEditArticle('${bl.id}',${idx},'ref',this.value)" style="width:58px;border:none;background:transparent;font-family:monospace;font-size:11px;color:var(--gray-500);"></td>
+      <td style="max-width:210px;">
+        <input type="text" value="${(a.designation || '').replace(/"/g, '&quot;')}" onchange="_blEditArticle('${bl.id}',${idx},'designation',this.value)" style="width:100%;min-width:150px;font-weight:600;border:1px solid var(--gray-200);background:var(--white);padding:3px 5px;border-radius:3px;">
+        ${sub ? `<div style="font-size:10px;color:var(--gray-400);margin-top:1px;padding-left:4px;">${sub}</div>` : ''}
+      </td>
+      <td class="num"><input type="number" value="${parseFloat(a.quantite) || 0}" step="0.01" min="0" onchange="_blEditArticle('${bl.id}',${idx},'quantite',this.value)" style="width:62px;text-align:right;"></td>
+      <td><input type="text" value="${(a.unite || '').replace(/"/g, '&quot;')}" onchange="_blEditArticle('${bl.id}',${idx},'unite',this.value)" style="width:60px;font-size:11px;"></td>
+      <td class="num"><input type="number" value="${parseFloat(a.prix_brut_unitaire_ht) || 0}" step="0.01" min="0" onchange="_blEditArticle('${bl.id}',${idx},'prix_brut_unitaire_ht',this.value)" style="width:74px;text-align:right;font-weight:600;"></td>
+      <td class="num" style="white-space:nowrap;">
+        <input type="number" value="${parseFloat(a.rabais_val) || 0}" step="0.01" min="0" onchange="_blEditArticle('${bl.id}',${idx},'rabais_val',this.value)" style="width:50px;text-align:right;${hasRab ? 'color:var(--danger);font-weight:700;' : ''}">
+        <select onchange="_blEditArticle('${bl.id}',${idx},'rabais_type',this.value)" style="font-size:11px;padding:2px;border:1px solid var(--gray-200);border-radius:3px;">
+          <option value="pct" ${a.rabais_type !== 'chf' ? 'selected' : ''}>%</option>
+          <option value="chf" ${a.rabais_type === 'chf' ? 'selected' : ''}>CHF</option>
+        </select>
+      </td>
+      <td class="num" style="font-variant-numeric:tabular-nums;${hasRab ? 'color:var(--phar-navy);font-weight:700;' : 'color:var(--gray-500);'}">${_n2(a.prix_unitaire_ht)}</td>
+      <td class="num" style="font-weight:700;font-variant-numeric:tabular-nums;">${_n2(a.total_ht)}</td>
+      <td style="text-align:center;"><span class="badge ${tva > 3 ? 'badge-warning' : 'badge-success'}" style="font-size:10px;">${tva}%</span></td>
+      <td class="num" style="font-weight:700;color:var(--phar-navy);font-variant-numeric:tabular-nums;">${_n2((parseFloat(a.total_ht) || 0) * (1 + tva / 100))}</td>
+      <td><select onchange="_blEditArticle('${bl.id}',${idx},'categorie_suggeree',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:3px;">${catOpts}</select></td>
+      <td style="text-align:center;"><button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:2px 7px;" title="Supprimer la ligne" onclick="_blRemoveArticle('${bl.id}',${idx})">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  const headerIcon = isMkt
+    ? `<svg width="16" height="14" viewBox="0 0 110 96" style="vertical-align:middle;margin-right:6px;"><polygon points="27.5,2 82.5,2 110,48 82.5,94 27.5,94 0,48" fill="var(--phar-navy)"/><polygon points="24,76 24,22 72,46" fill="white"/></svg>`
+    : '✓ ';
+  const titleTxt = isMkt ? 'PHAR Marketplace · Commande'
+    : (bl.type_document === 'facture' ? 'Facture' : 'Bon de livraison');
+  const gRabActive = (parseFloat(bl.rabais_global_val) || 0) > 0;
+
+  return `
+    <div class="scan-result-header" style="${isMkt ? 'background:linear-gradient(90deg,var(--phar-navy-faint),white);' : ''}">
+      <div style="flex:1;">
+        <h3 style="${isMkt ? 'color:var(--phar-navy);' : ''}">${headerIcon}${titleTxt}</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+          <label style="font-size:10px;color:var(--gray-500);display:flex;flex-direction:column;gap:2px;">FOURNISSEUR
+            <input type="text" value="${(bl.fournisseur || '').replace(/"/g, '&quot;')}" onchange="_blEditMeta('${bl.id}','fournisseur',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:3px;min-width:150px;">
+          </label>
+          <label style="font-size:10px;color:var(--gray-500);display:flex;flex-direction:column;gap:2px;">N° DOCUMENT
+            <input type="text" value="${(bl.numero || '').replace(/"/g, '&quot;')}" onchange="_blEditMeta('${bl.id}','numero',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:3px;width:130px;font-family:monospace;">
+          </label>
+          <label style="font-size:10px;color:var(--gray-500);display:flex;flex-direction:column;gap:2px;">DATE
+            <input type="text" value="${(bl.date || '').replace(/"/g, '&quot;')}" onchange="_blEditMeta('${bl.id}','date',this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:3px;width:110px;">
+          </label>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openBLIntegrationModalFromBL('${bl.id}')">Intégrer à l'inventaire</button>
+    </div>
+
+    <div class="inv-table-scroll">
+      <table class="data-table" style="font-size:12px;">
+        <thead><tr>
+          <th>Réf.</th><th>Désignation</th><th class="num">Qté</th><th>Unité</th>
+          <th class="num">PU brut HT</th><th class="num">Rabais</th><th class="num">PU net</th>
+          <th class="num">Total HT</th><th style="text-align:center;">TVA</th><th class="num">Total TTC</th>
+          <th>Catégorie</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr style="background:var(--phar-navy-pale);">
+            <td colspan="6" style="padding:8px 12px;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-weight:700;color:var(--phar-navy);">Rabais global BL :</span>
+                <input type="number" value="${parseFloat(bl.rabais_global_val) || 0}" step="0.01" min="0" onchange="_blEditMeta('${bl.id}','rabais_global_val',this.value)" style="width:62px;text-align:right;${gRabActive ? 'color:var(--danger);font-weight:700;' : ''}">
+                <select onchange="_blEditMeta('${bl.id}','rabais_global_type',this.value)" style="font-size:11px;padding:2px;border:1px solid var(--gray-200);border-radius:3px;">
+                  <option value="pct" ${bl.rabais_global_type !== 'chf' ? 'selected' : ''}>%</option>
+                  <option value="chf" ${bl.rabais_global_type === 'chf' ? 'selected' : ''}>CHF</option>
+                </select>
+                <span style="font-size:10px;color:var(--gray-400);">réparti au prorata des lignes</span>
+                <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="_blAddArticle('${bl.id}')">+ Ajouter une ligne</button>
+              </div>
+            </td>
+            <td class="num" style="font-size:10px;color:var(--gray-500);">Net</td>
+            <td class="num" style="font-weight:800;">${_n2(bl.total_ht)}</td>
+            <td style="text-align:center;font-size:10px;color:var(--gray-500);">TVA ${_n2(bl.total_tva)}</td>
+            <td class="num" style="font-weight:800;font-family:'Archivo';font-size:13px;color:var(--phar-navy);">${_n2(bl.total_ttc)}</td>
+            <td colspan="2"></td>
+          </tr>
+          ${(bl.total_rabais || 0) > 0 ? `<tr><td colspan="12" style="padding:6px 12px;font-size:11px;color:var(--danger);background:var(--danger-light);">Rabais total appliqué : −${_n2(bl.total_rabais)} CHF · brut ${_n2(bl.total_brut_ht)} → net ${_n2(bl.total_ht)} HT</td></tr>` : ''}
+        </tfoot>
+      </table>
+    </div>
+    ${bl.notes ? `<div style="padding:8px 16px;background:var(--gray-50);border-top:1px solid var(--gray-200);font-size:11px;color:var(--gray-600);"><strong>Notes :</strong> ${bl.notes}</div>` : ''}
+    <div style="padding:6px 16px;background:var(--gray-50);border-top:1px solid var(--gray-200);font-size:10px;color:var(--gray-400);">Modifications enregistrées automatiquement · ${isMkt ? 'Import PHAR Marketplace' : 'Scan IA'}${bl.fichier ? ' · ' + bl.fichier : ''}</div>
+  `;
+}
+
+function _blRerenderCard(blId) {
+  const el = document.getElementById('bl-card-' + blId);
+  const bl = _blFind(blId);
+  if (el && bl) el.innerHTML = _blCardInnerHTML(bl);
+}
+
+function renderEditableBLCard(bl) {
+  if (!bl) return;
+  _blRecomputeNet(bl);
+  const container = document.getElementById('bl-scan-results');
+  if (!container) return;
+  let card = document.getElementById('bl-card-' + bl.id);
+  if (!card) {
+    card = document.createElement('div');
+    card.className = 'scan-result-card';
+    card.id = 'bl-card-' + bl.id;
+    card.style.marginBottom = '16px';
+    container.appendChild(card);
+  }
+  card.innerHTML = _blCardInnerHTML(bl);
+}
+
+/* Override : la carte d'import éditable remplace le rendu précédent */
+window.renderScanResultCard = function (bl) { renderEditableBLCard(bl); };

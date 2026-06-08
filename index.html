@@ -4374,9 +4374,9 @@ function persistScannedBL(parsed, fichier) {
     scan_ts: new Date().toISOString(),
     fichier: fichier || '',
     type_document: parsed.type_document || 'bon_livraison',
-    fournisseur: (parsed.fournisseur && parsed.fournisseur.nom) || '',
+    fournisseur: (typeof parsed.fournisseur === 'string' ? parsed.fournisseur : (parsed.fournisseur && parsed.fournisseur.nom)) || '',
     numero: parsed.numero || '',
-    date: parsed.date_document || '',
+    date: parsed.date_document || parsed.date || '',
     articles: Array.isArray(parsed.articles) ? parsed.articles : [],
     total_ht: parsed.total_ht || 0,
     total_tva: parsed.total_tva || 0,
@@ -4527,7 +4527,8 @@ function openBLIntegrationModalFromBL(blId) {
   const bl = pharBLs.find(b => b.id === blId);
   if (!bl) { alert('Bulletin introuvable.'); return; }
   window._activeBLId = blId;
-  const data = bl.raw || {
+  // Utilise les valeurs canoniques éditées du BL (prix nets + méta modifiée)
+  const data = {
     articles: bl.articles,
     fournisseur: { nom: bl.fournisseur },
     numero: bl.numero,
