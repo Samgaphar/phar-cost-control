@@ -1508,3 +1508,287 @@ document.addEventListener('DOMContentLoaded', () => {
     const origSwitchACTab = window.switchACTab;
   }
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GESTION DES FOURNISSEURS
+// ══════════════════════════════════════════════════════════════════════════════
+
+(function() {
+  // Inject modal HTML
+  function injectFourModal() {
+    if (document.getElementById('fournisseurs-modal')) return;
+    const div = document.createElement('div');
+    div.innerHTML = `
+      <div class="modal-backdrop" id="fournisseurs-modal">
+        <div class="modal" style="max-width:680px;width:100%;">
+          <div class="modal-header">
+            <div class="modal-title">Gestion des fournisseurs</div>
+            <button class="modal-close" onclick="document.getElementById('fournisseurs-modal').classList.remove('visible')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body" style="max-height:65vh;overflow-y:auto;">
+            <div id="four-modal-content"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline" onclick="document.getElementById('fournisseurs-modal').classList.remove('visible')">Fermer</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(div);
+    document.getElementById('fournisseurs-modal').addEventListener('click', e => {
+      if (e.target.id === 'fournisseurs-modal') e.target.classList.remove('visible');
+    });
+  }
+
+  // Override nav-fournisseurs handler
+  function patchNavFournisseurs() {
+    const btn = document.getElementById('nav-fournisseurs');
+    if (!btn) return;
+    // Clone to remove existing handlers
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.addEventListener('click', () => window.openFournisseursModal());
+  }
+
+  // Initialize on DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => { injectFourModal(); patchNavFournisseurs(); });
+  } else {
+    setTimeout(() => { injectFourModal(); patchNavFournisseurs(); }, 0);
+  }
+})();
+
+// Global state for supplier management
+let _fourList = [];
+let _fourMergeSrc = null;
+
+function _fourGetStores() {
+  return {
+    food: (typeof pharStores !== 'undefined' && pharStores.food) ? pharStores.food : [],
+    bev:  (typeof pharStores !== 'undefined' && pharStores.bev)  ? pharStores.bev  : []
+  };
+}
+
+function _fourGetAll() {
+  const { food, bev } = _fourGetStores();
+  const names = new Set();
+  [...food, ...bev].forEach(item => {
+    if (item.fournisseur) names.add(item.fournisseur);
+    (item.options_achat || []).forEach(o => { if (o.fournisseur) names.add(o.fournisseur); });
+  });
+  try {
+    const fc = JSON.parse(localStorage.getItem('phar_fc_articles_v1') || '[]');
+    fc.forEach(a => { if (a.fournisseur) names.add(a.fournisseur); });
+  } catch(e) {}
+  return [...names].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+}
+
+function _fourCountArticles(name) {
+  const { food, bev } = _fourGetStores();
+  let n = 0;
+  [...food, ...bev].forEach(item => {
+    if (item.fournisseur === name) n++;
+    (item.options_achat || []).forEach(o => { if (o.fournisseur === name) n++; });
+  });
+  try {
+    const fc = JSON.parse(localStorage.getItem('phar_fc_articles_v1') || '[]');
+    fc.forEach(a => { if (a.fournisseur === name) n++; });
+  } catch(e) {}
+  return n;
+}
+
+function _fourApplyRenames(renames) {
+  const { food, bev } = _fourGetStores();
+  function updateArr(arr) {
+    arr.forEach(item => {
+      if (item.fournisseur != null && Object.prototype.hasOwnProperty.call(renames, item.fournisseur))
+        item.fournisseur = renames[item.fournisseur];
+      (item.options_achat || []).forEach(o => {
+        if (o.fournisseur != null && Object.prototype.hasOwnProperty.call(renames, o.fournisseur))
+          o.fournisseur = renames[o.fournisseur];
+      });
+    });
+  }
+  updateArr(food);
+  updateArr(bev);
+
+  // Save pharStores — try known save functions, fallback to direct localStorage
+  if      (typeof saveStores     === 'function') saveStores();
+  else if (typeof saveInventaire === 'function') saveInventaire();
+  else if (typeof saveMercuriale === 'function') { saveMercuriale('food'); saveMercuriale('bev'); }
+  else {
+    try { localStorage.setItem('phar_stores_food', JSON.stringify(food)); } catch(e) {}
+    try { localStorage.setItem('phar_stores_bev',  JSON.stringify(bev));  } catch(e) {}
+  }
+
+  // Update flash cost articles
+  if (typeof fcArticles !== 'undefined') {
+    fcArticles.forEach(a => {
+      if (a.fournisseur != null && Object.prototype.hasOwnProperty.call(renames, a.fournisseur))
+        a.fournisseur = renames[a.fournisseur];
+    });
+    if (typeof fcSaveAll === 'function') fcSaveAll();
+  }
+  try {
+    const fc = JSON.parse(localStorage.getItem('phar_fc_articles_v1') || '[]');
+    let changed = false;
+    fc.forEach(a => {
+      if (a.fournisseur != null && Object.prototype.hasOwnProperty.call(renames, a.fournisseur)) {
+        a.fournisseur = renames[a.fournisseur];
+        changed = true;
+      }
+    });
+    if (changed) localStorage.setItem('phar_fc_articles_v1', JSON.stringify(fc));
+  } catch(e) {}
+}
+
+function openFournisseursModal() {
+  _fourMergeSrc = null;
+  const modal = document.getElementById('fournisseurs-modal');
+  if (!modal) return;
+  modal.classList.add('visible');
+  _renderFournisseursList();
+}
+
+function _renderFournisseursList() {
+  const el = document.getElementById('four-modal-content');
+  if (!el) return;
+  _fourList = _fourGetAll();
+
+  if (!_fourList.length) {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--gray-400);">Aucun fournisseur référencé dans les articles.</div>';
+    return;
+  }
+
+  const mergeBanner = _fourMergeSrc
+    ? `<div style="background:#FFF3CD;border:1px solid #FFD86B;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:10px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#856404" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Fusion en cours : <strong style="color:#856404;">${_escH(_fourMergeSrc)}</strong> — cliquez sur <strong>Fusionner</strong> du fournisseur cible, ou <button onclick="_fourCancelMerge()" style="background:none;border:none;cursor:pointer;color:#856404;text-decoration:underline;font-size:13px;padding:0;">annuler</button></span>
+      </div>`
+    : '';
+
+  const rows = _fourList.map((name, idx) => {
+    const count = _fourCountArticles(name);
+    const isSrc = _fourMergeSrc === name;
+    const initials = name.replace(/[^a-zA-ZÀ-ÿ0-9]/g,'').slice(0,2).toUpperCase() || name.slice(0,2).toUpperCase();
+    return `<tr style="${isSrc ? 'background:#EEF1FB;' : 'background:white;'}border-bottom:1px solid var(--gray-100);">
+      <td style="padding:12px 14px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:34px;height:34px;border-radius:6px;background:var(--phar-navy,#2E3192);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;font-family:'Archivo',sans-serif;flex-shrink:0;">${_escH(initials)}</div>
+          <input type="text" id="four-inp-${idx}"
+                 value="${_escA(name)}"
+                 style="font-size:13px;font-weight:600;color:var(--phar-navy,#2E3192);border:1.5px solid var(--gray-200,#E5E5E3);border-radius:6px;padding:7px 10px;min-width:170px;flex:1;outline:none;background:white;transition:border-color .15s;"
+                 onfocus="this.style.borderColor='var(--phar-navy,#2E3192)'"
+                 onblur="this.style.borderColor='var(--gray-200,#E5E5E3)'"
+                 onkeydown="if(event.key==='Enter')fourValider(${idx})">
+        </div>
+      </td>
+      <td style="padding:12px 8px;text-align:center;width:90px;">
+        <span style="font-size:11px;font-weight:700;background:var(--gray-100,#F4F3F3);color:var(--gray-500,#7E7E79);padding:3px 9px;border-radius:4px;">${count} art.</span>
+      </td>
+      <td style="padding:12px 10px;text-align:right;white-space:nowrap;">
+        <button class="btn btn-primary btn-sm" onclick="fourValider(${idx})" title="Enregistrer le nouveau nom">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px;height:12px;stroke-width:2.5;margin-right:3px;"><polyline points="20 6 9 17 4 12"/></svg>
+          Valider
+        </button>
+        <button class="btn btn-ghost btn-sm"
+                style="${isSrc ? 'background:var(--phar-navy,#2E3192);color:white;' : _fourMergeSrc ? 'border-color:var(--phar-navy,#2E3192);color:var(--phar-navy,#2E3192);font-weight:700;' : ''}"
+                onclick="fourMerge(${idx})"
+                title="${isSrc ? 'Annuler la fusion' : _fourMergeSrc ? 'Fusionner '+_escA(_fourMergeSrc)+' dans ce fournisseur' : 'Sélectionner pour fusion'}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px;height:12px;stroke-width:2;margin-right:3px;"><path d="M8 7H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3m-1-4-4 4-4-4m4-4v13"/></svg>
+          ${isSrc ? 'Annuler' : _fourMergeSrc ? '← Fusionner ici' : 'Fusionner'}
+        </button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger,#B23B2A);" onclick="fourDelete(${idx})" title="Retirer ce fournisseur de tous les articles">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px;height:12px;stroke-width:2;margin-right:2px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          Supprimer
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="font-size:13px;color:var(--gray-500,#7E7E79);margin-bottom:12px;">${_fourList.length} fournisseur${_fourList.length !== 1 ? 's' : ''} référencé${_fourList.length !== 1 ? 's' : ''}</div>
+    ${mergeBanner}
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:var(--phar-navy,#2E3192);">
+            <th style="padding:10px 14px;text-align:left;color:white;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Fournisseur</th>
+            <th style="padding:10px 8px;text-align:center;color:white;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Articles</th>
+            <th style="padding:10px 10px;text-align:right;color:white;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:14px;padding:10px 14px;background:var(--gray-50,#F9F9F8);border-radius:8px;font-size:11.5px;color:var(--gray-500,#7E7E79);line-height:1.6;">
+      <strong style="color:var(--gray-700,#444);">Valider</strong> — modifie le nom et met à jour tous les articles liés ·
+      <strong style="color:var(--gray-700,#444);">Fusionner</strong> — regroupe deux fournisseurs en un seul ·
+      <strong style="color:var(--gray-700,#444);">Supprimer</strong> — retire le fournisseur de tous les articles
+    </div>`;
+}
+
+function _escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _escA(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+
+function _fourCancelMerge() {
+  _fourMergeSrc = null;
+  _renderFournisseursList();
+}
+
+function fourValider(idx) {
+  const origName = _fourList[idx];
+  if (origName === undefined) return;
+  const input = document.getElementById('four-inp-' + idx);
+  if (!input) return;
+  const newName = input.value.trim();
+  if (!newName) {
+    if (typeof showToast === 'function') showToast('Le nom ne peut pas être vide.', 'error');
+    input.focus();
+    return;
+  }
+  if (newName === origName) {
+    if (typeof showToast === 'function') showToast('Aucun changement détecté.', '');
+    return;
+  }
+  _fourApplyRenames({ [origName]: newName });
+  if (typeof showToast === 'function') showToast(`✓ Renommé : "${origName}" → "${newName}"`, 'success');
+  if (_fourMergeSrc === origName) _fourMergeSrc = null;
+  _renderFournisseursList();
+}
+
+function fourDelete(idx) {
+  const name = _fourList[idx];
+  if (name === undefined) return;
+  const count = _fourCountArticles(name);
+  if (!confirm(`Supprimer le fournisseur "${name}" ?\n\nCela retirera ce fournisseur de ${count} article${count !== 1 ? 's' : ''}.`)) return;
+  _fourApplyRenames({ [name]: '' });
+  if (_fourMergeSrc === name) _fourMergeSrc = null;
+  if (typeof showToast === 'function') showToast(`Fournisseur "${name}" supprimé.`, '');
+  _renderFournisseursList();
+}
+
+function fourMerge(idx) {
+  const name = _fourList[idx];
+  if (name === undefined) return;
+
+  if (!_fourMergeSrc) {
+    _fourMergeSrc = name;
+    _renderFournisseursList();
+    if (typeof showToast === 'function') showToast(`"${name}" sélectionné — cliquez sur "← Fusionner ici" d'un autre fournisseur.`, '');
+    return;
+  }
+  if (_fourMergeSrc === name) {
+    _fourMergeSrc = null;
+    _renderFournisseursList();
+    return;
+  }
+  const src = _fourMergeSrc;
+  const countSrc = _fourCountArticles(src);
+  if (!confirm(`Fusionner "${src}" dans "${name}" ?\n\n${countSrc} article${countSrc !== 1 ? 's' : ''} sera${countSrc !== 1 ? 'ont' : ''} mis à jour.\nCette action est irréversible.`)) return;
+  _fourApplyRenames({ [src]: name });
+  _fourMergeSrc = null;
+  if (typeof showToast === 'function') showToast(`✓ Fusionné : "${src}" → "${name}"`, 'success');
+  _renderFournisseursList();
+}
