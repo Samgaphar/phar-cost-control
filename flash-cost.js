@@ -2375,9 +2375,9 @@ function importPHARMarketplace() {
         if (!_isPHARMarketplace(rows)) {
           if (typeof blLog === 'function')
             blLog(`  ✗ Format non reconnu — ce fichier ne semble pas être un export PHAR Marketplace.`, 'err');
-          // Essaie quand même de scanner via Claude si clé dispo
+          // Essaie quand même de scanner via PHAR API si clé dispo
           if (typeof blLog === 'function')
-            blLog(`  → Essayez le scan Claude AI pour ce document.`, 'info');
+            blLog(`  → Essayez le scan PHAR API pour ce document.`, 'info');
           fail++;
           continue;
         }

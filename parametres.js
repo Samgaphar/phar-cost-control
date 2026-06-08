@@ -388,7 +388,7 @@ function renderParamMonCompte() {
             </label>
             <div style="height:1px;background:var(--gray-200);"></div>
             <div>
-              <label class="field-label">Clé Claude API personnelle</label>
+              <label class="field-label">Clé PHAR API personnelle</label>
               <input type="password" id="mc-claude-key"
                      value="${(typeof getActiveClient === 'function' ? getActiveClient()?.claude_api_key : '') || ''}"
                      placeholder="sk-ant-api03-…" style="font-size:12px;">
@@ -415,7 +415,7 @@ function saveMonCompte() {
   u.alertes        = document.getElementById('mc-alertes')?.checked || false;
   u.email_journalier = document.getElementById('mc-email-jour')?.checked || false;
   saveUsers();
-  // Sync clé Claude
+  // Sync clé PHAR API
   const keyVal = document.getElementById('mc-claude-key')?.value?.trim();
   if (keyVal && typeof updateClientField === 'function' && typeof getActiveClient === 'function') {
     updateClientField(getActiveClient()?.id, 'claude_api_key', keyVal);
