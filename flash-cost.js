@@ -3206,7 +3206,10 @@ function _blRecomputeNet(bl) {
 
     const cat = a.categorie_suggeree
       || (typeof fcAutoCategory === 'function' ? fcAutoCategory(a.designation || '') : 'Autres');
-    const tva = typeof fcAutoTVA === 'function' ? fcAutoTVA(a.designation || '', cat) : 2.6;
+    const autoTva = typeof fcAutoTVA === 'function' ? fcAutoTVA(a.designation || '', cat) : 2.6;
+    // Override manuel confirmé sur le BL réel : prioritaire sur le taux auto
+    const tva = (a.tva_override != null && !isNaN(parseFloat(a.tva_override)))
+      ? parseFloat(a.tva_override) : autoTva;
     a.tva_pct = tva;
 
     totHT   += net;
@@ -3304,6 +3307,16 @@ function _blCardInnerHTML(bl) {
       + (a.fournisseur_ligne && a.fournisseur_ligne !== 'PHAR Marketplace'
         ? `${a.units_per_uv ? ' · ' : ''}via ${a.fournisseur_ligne}` : '');
     const hasRab = (parseFloat(a.rabais_val) || 0) > 0;
+    // TVA éditable : taux auto, override manuel confirmé, taux suisses légaux
+    const autoTva = (typeof fcAutoTVA === 'function' ? fcAutoTVA(a.designation || '', cat) : 2.6);
+    const isManualTva = (a.tva_override != null && !isNaN(parseFloat(a.tva_override)));
+    const effTva = isManualTva ? parseFloat(a.tva_override) : autoTva;
+    const _tvaRates = [8.1, 3.8, 2.6, 0];
+    let tvaOpts = `<option value="__auto__" ${!isManualTva ? 'selected' : ''}>Auto (${autoTva}%)</option>`;
+    tvaOpts += _tvaRates.map(r => `<option value="${r}" ${isManualTva && Math.abs(effTva - r) < 0.001 ? 'selected' : ''}>${r}%</option>`).join('');
+    if (isManualTva && !_tvaRates.some(r => Math.abs(effTva - r) < 0.001))
+      tvaOpts += `<option value="${effTva}" selected>${effTva}%</option>`;
+    tvaOpts += `<option value="__other__">Autre…</option>`;
     return `<tr id="bl-art-row-${bl.id}-${idx}">
       <td><input type="text" value="${(a.ref || '').replace(/"/g, '&quot;')}" onchange="_blEditArticle('${bl.id}',${idx},'ref',this.value)" style="width:58px;border:none;background:transparent;font-family:monospace;font-size:11px;color:var(--gray-500);"></td>
       <td style="max-width:210px;">
@@ -3324,7 +3337,9 @@ function _blCardInnerHTML(bl) {
       </td>
       <td class="num" style="font-variant-numeric:tabular-nums;${hasRab ? 'color:var(--phar-navy);font-weight:700;' : 'color:var(--gray-500);'}">${_n2(a.prix_unitaire_ht)}</td>
       <td class="num" style="font-weight:700;font-variant-numeric:tabular-nums;">${_n2(a.total_ht)}</td>
-      <td style="text-align:center;"><span class="badge ${tva > 3 ? 'badge-warning' : 'badge-success'}" style="font-size:10px;">${tva}%</span></td>
+      <td style="text-align:center;">
+        <select onchange="_blSetTVA('${bl.id}',${idx},this.value)" title="${isManualTva ? 'TVA confirmée manuellement' : 'TVA déduite automatiquement — à confirmer selon le BL'}" style="font-size:11px;height:26px;box-sizing:border-box;padding:2px 4px;border-radius:3px;border:1px solid ${isManualTva ? 'var(--phar-navy)' : 'var(--gray-200)'};${isManualTva ? 'color:var(--phar-navy);font-weight:700;' : ''}">${tvaOpts}</select>
+      </td>
       <td class="num" style="font-weight:700;color:var(--phar-navy);font-variant-numeric:tabular-nums;">${_n2((parseFloat(a.total_ht) || 0) * (1 + tva / 100))}</td>
       <td><select onchange="_blEditArticle('${bl.id}',${idx},'categorie_suggeree',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:3px;">${catOpts}</select></td>
       <td style="text-align:center;"><button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:2px 7px;" title="Supprimer la ligne" onclick="_blRemoveArticle('${bl.id}',${idx})">✕</button></td>
@@ -3550,4 +3565,31 @@ function _blApplyFournisseurCondition(bl, force) {
   bl.rabais_global_type = sup.rabais_type === 'chf' ? 'chf' : 'pct';
   bl.rabais_global_val = val;
   return true;
+}
+
+/* ─── TVA éditable par ligne (override manuel confirmé) ─── */
+function _blSetTVA(blId, idx, value) {
+  const bl = _blFind(blId);
+  if (!bl || !bl.articles || !bl.articles[idx]) return;
+  const a = bl.articles[idx];
+  if (value === '__auto__') {
+    a.tva_override = null; // revient au taux automatique
+  } else if (value === '__other__') {
+    const cur = a.tva_pct != null ? a.tva_pct : '';
+    const v = (typeof prompt === 'function') ? prompt('Taux de TVA (%) figurant sur le BL :', String(cur)) : null;
+    if (v === null) { _blRerenderCard(blId); return; } // annulé → rétablit le sélecteur
+    const n = parseFloat(String(v).replace(',', '.'));
+    if (isNaN(n) || n < 0) {
+      if (typeof showToast === 'function') showToast('Taux de TVA invalide.', 'error');
+      _blRerenderCard(blId);
+      return;
+    }
+    a.tva_override = n;
+  } else {
+    a.tva_override = parseFloat(value) || 0;
+  }
+  _blRecomputeNet(bl);
+  if (typeof saveStores === 'function') saveStores();
+  _blRerenderCard(blId);
+  if (typeof renderBLRepository === 'function') renderBLRepository();
 }
