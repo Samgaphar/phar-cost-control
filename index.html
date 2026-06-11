@@ -2114,7 +2114,7 @@
         <div class="nav-sub-item" data-module="fc-bons" data-tab="scan">Scanner un BL</div>
         <div class="nav-sub-item" data-module="fc-bons" data-tab="bulletins">Historique BL</div>
         <div class="nav-sub-label">Comptabilité</div>
-        <div class="nav-sub-item" data-module="fc-bons" data-tab="rapprochement">Factures / Rapprochement</div>
+        <div class="nav-sub-item" data-module="fc-bons" data-tab="recap">Récapitulatif & Factures</div>
         <div class="nav-sub-label">Flash Cost</div>
         <div class="nav-sub-item" data-module="fc-calcul">Flash Cost hebdo</div>
         <div class="nav-sub-item" data-module="fc-stock">Stock de clôture</div>
@@ -2560,6 +2560,7 @@
       <div class="subtab-bar">
         <button class="subtab active" data-achats-tab="scan" onclick="switchAchatsTab('scan')">Scan bulletins</button>
         <button class="subtab" data-achats-tab="bulletins" onclick="switchAchatsTab('bulletins')">Bulletins &amp; rapprochement</button>
+        <button class="subtab" data-achats-tab="recap" onclick="switchAchatsTab('recap')">Récapitulatif</button>
         <button class="subtab" data-achats-tab="rapprochement" onclick="switchAchatsTab('rapprochement')">Cumul achats FC</button>
       </div>
 
@@ -2603,6 +2604,37 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 4v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1zM3 9h18M9 21V9"/></svg>
                 Lancer le scan IA
               </button>
+            </div>
+            <!-- Séparateur saisie manuelle -->
+            <div style="display:flex;align-items:center;gap:12px;margin-top:20px;margin-bottom:16px;">
+              <div style="flex:1;height:1px;background:var(--gray-200);"></div>
+              <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.1em;">ou</span>
+              <div style="flex:1;height:1px;background:var(--gray-200);"></div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-lg);">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:var(--gray-900);">Créer un BL manuellement</div>
+                <div style="font-size:11px;color:var(--gray-500);margin-top:2px;">Saisie directe sans document · utile pour les fournisseurs sans BL numérique</div>
+              </div>
+              <div style="position:relative;display:inline-flex;">
+                <button class="btn btn-outline btn-sm" onclick="openManualBLModal('bon_livraison')" style="border-right:none;border-radius:var(--radius) 0 0 var(--radius);padding-right:10px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+                  Saisir manuellement
+                </button>
+                <button class="btn btn-outline btn-sm" onclick="_toggleMblDropdown()" style="padding:0 8px;border-radius:0 var(--radius) var(--radius) 0;font-size:11px;" title="Choisir le type de document">▾</button>
+                <div id="mbl-type-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);right:0;min-width:220px;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:200;">
+                  <div onclick="openManualBLModal('bon_livraison');_toggleMblDropdown()" style="padding:11px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;border-bottom:1px solid var(--gray-100);" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+                    <span style="width:8px;height:8px;border-radius:50%;background:var(--phar-navy);flex-shrink:0;"></span>
+                    Bon de livraison
+                    <span style="margin-left:auto;font-size:10px;color:var(--gray-400);font-weight:400;">entrée stock</span>
+                  </div>
+                  <div onclick="openManualBLModal('bulletin_retour');_toggleMblDropdown()" style="padding:11px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+                    <span style="width:8px;height:8px;border-radius:50%;background:var(--danger);flex-shrink:0;"></span>
+                    Bulletin de retour
+                    <span style="margin-left:auto;font-size:10px;color:var(--gray-400);font-weight:400;">crédit fournisseur</span>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="scan-log" id="bl-scan-log"></div>
             <div id="bl-scan-results"></div>
@@ -2660,6 +2692,13 @@
         </div>
         <div class="card" style="padding:0;" id="bl-repo-card">
           <div id="bl-repo-table"></div>
+        </div>
+      </div>
+
+      <!-- RÉCAPITULATIF BL / RETOURS / FACTURES -->
+      <div class="achats-tabpane" id="achats-pane-recap">
+        <div id="achats-recap-content">
+          <div style="padding:48px;text-align:center;color:var(--gray-400);">Chargement…</div>
         </div>
       </div>
 
@@ -4291,45 +4330,47 @@ async function fileToBase64(file) {
 }
 
 /* Prompt système d'extraction (partagé par tous les scans) */
-const BL_SYSTEM_PROMPT = `Tu es un assistant expert en cost control hôtelier. Tu analyses un bon de livraison ou une facture fournisseur F&B et tu en extrais les données structurées avec précision.
+const BL_SYSTEM_PROMPT = `Tu es un assistant expert en cost control hôtelier. Tu analyses un document fournisseur F&B (bon de livraison, bulletin de retour ou facture) et tu en extrais les données structurées avec précision.
 
 Renvoie UNIQUEMENT un objet JSON valide (pas de markdown, pas de texte autour) avec exactement cette structure :
 
 {
-  "type_document": "bon_livraison" ou "facture",
+  "type_document": "bon_livraison", "bulletin_retour" ou "facture",
   "fournisseur": {
     "nom": "Nom complet du fournisseur",
     "adresse": "Adresse si visible, sinon vide",
     "telephone": "Téléphone si visible, sinon vide"
   },
-  "numero": "Numéro du BL ou de la facture",
+  "numero": "Numéro du BL, retour ou facture",
+  "bl_reference": "Numéro du BL d'origine si c'est un retour (ex: BL-2026-0042), sinon chaîne vide",
   "date_document": "Date au format JJ.MM.AAAA",
   "client": "Nom du client/établissement destinataire",
   "articles": [
     {
       "ref": "Référence article si présente, sinon vide",
       "designation": "Désignation complète",
-      "quantite": nombre,
+      "quantite": nombre POSITIF (même pour un retour — le signe est géré par l'application),
       "unite": "kg, pce, btl, carton, etc.",
-      "prix_unitaire_ht": nombre (CHF),
-      "total_ht": nombre (CHF),
+      "prix_unitaire_ht": nombre positif (CHF),
+      "total_ht": nombre positif (CHF),
       "tva_pct": nombre (taux TVA en %, ex 2.6 ou 8.1),
       "categorie_suggeree": "Viande/Poisson/Légumes/Fruits/Épicerie/Boulangerie/Boissons/Vins/Spiritueux/Autres"
     }
   ],
-  "total_ht": nombre (CHF),
-  "total_tva": nombre (CHF),
-  "total_ttc": nombre (CHF),
+  "total_ht": nombre positif (CHF),
+  "total_tva": nombre positif (CHF),
+  "total_ttc": nombre positif (CHF),
   "devise": "CHF",
   "notes": "Toute information particulière (livraison, échéance, conditions...)"
 }
 
 Règles :
-- Tous les nombres sont des nombres JS, pas des chaînes
+- Tous les nombres sont des nombres JS POSITIFS, pas des chaînes
 - Les montants en CHF (Francs Suisses)
 - Si une donnée n'est pas lisible, mets une chaîne vide pour le texte ou 0 pour les nombres
 - Catégorise chaque article selon la liste fournie
-- Sois précis sur les quantités et prix — c'est critique pour le cost control`;
+- Sois précis sur les quantités et prix — c'est critique pour le cost control
+- Pour identifier un bulletin de retour : cherche les titres "Retour", "Avoir", "Bon de retour", "Note de crédit", "Credit note", "Avis de crédit" ou des montants encadrés/négatifs. Extrais toujours les quantités en valeur POSITIVE.`;
 
 // Scanne UN document et renvoie { parsed, usage }
 async function scanSingleDocument(file) {
@@ -4393,10 +4434,11 @@ function persistScannedBL(parsed, fichier) {
     total_ttc: parsed.total_ttc || 0,
     devise: parsed.devise || 'CHF',
     notes: parsed.notes || '',
+    bl_reference: parsed.bl_reference || '',
     statut: 'a_rapprocher',     // a_rapprocher | integre_stock | rapproche
     integre_stock: false,
     facture_id: null,
-    source: parsed.source || 'claude_scan',  // 'phar_marketplace' | 'claude_scan'
+    source: parsed.source || 'claude_scan',  // 'phar_marketplace' | 'claude_scan' | 'manuel'
     raw: parsed
   };
   pharBLs.unshift(bl);
@@ -4501,14 +4543,19 @@ function renderScanResultCard(bl) {
   card.style.marginBottom = '16px';
   card.innerHTML = `
     <div class="scan-result-header">
-      <h3>✓ ${bl.type_document === 'facture' ? 'Facture' : 'Bon de livraison'}${bl.fichier ? ' · ' + bl.fichier : ''}</h3>
-      <button class="btn btn-primary btn-sm" onclick="openBLIntegrationModalFromBL('${bl.id}')">Intégrer à l'inventaire</button>
+      <h3>✓ ${bl.type_document === 'facture' ? 'Facture' : bl.type_document === 'bulletin_retour' ? '↩ Bulletin de retour' : 'Bon de livraison'}${bl.fichier ? ' · ' + bl.fichier : ''}
+        ${bl.type_document === 'bulletin_retour' ? '<span style="margin-left:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:3px;background:var(--danger-light);color:var(--danger);">RETOUR</span>' : ''}
+      </h3>
+      <button class="btn ${bl.type_document === 'bulletin_retour' ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="openBLIntegrationModalFromBL('${bl.id}')" style="${bl.type_document === 'bulletin_retour' ? 'border-color:var(--danger);color:var(--danger);' : ''}">
+        ${bl.type_document === 'bulletin_retour' ? '↩ Appliquer le retour' : 'Intégrer à l\'inventaire'}
+      </button>
     </div>
     <div class="scan-meta-grid">
       <div class="scan-meta-item"><div class="label">Fournisseur</div><div class="value">${bl.fournisseur || '—'}</div></div>
       <div class="scan-meta-item"><div class="label">N° document</div><div class="value">${bl.numero || '—'}</div></div>
+      ${bl.bl_reference ? `<div class="scan-meta-item"><div class="label">Réf. BL origine</div><div class="value" style="color:var(--danger);font-weight:600;">${bl.bl_reference}</div></div>` : ''}
       <div class="scan-meta-item"><div class="label">Date</div><div class="value">${bl.date || '—'}</div></div>
-      <div class="scan-meta-item"><div class="label">Total TTC</div><div class="value" style="color: var(--phar-navy);">${totalTTC.toFixed(2)} CHF</div></div>
+      <div class="scan-meta-item"><div class="label">${bl.type_document === 'bulletin_retour' ? 'Crédit TTC' : 'Total TTC'}</div><div class="value" style="color:${bl.type_document === 'bulletin_retour' ? 'var(--danger)' : 'var(--phar-navy)'};">${bl.type_document === 'bulletin_retour' ? '−' : ''}${totalTTC.toFixed(2)} CHF</div></div>
     </div>
     ${articlesHtml}
     ${bl.notes ? `<div style="padding: 12px 20px; background: var(--gray-50); border-top: 1px solid var(--gray-200); font-size: 12px; color: var(--gray-700);"><strong>Notes :</strong> ${bl.notes}</div>` : ''}
@@ -4586,6 +4633,8 @@ function closeBLIntegrationModal() {
 
 // (Re)construit le contenu de la modale d'intégration
 function renderBLIntegrationModal() {
+  const activeBL = window._activeBLId ? pharBLs.find(b => b.id === window._activeBLId) : null;
+  const isRetour = activeBL?.type_document === 'bulletin_retour';
   const usesFood = _blDraft.some(l => l.include && l.merc === 'food');
   const usesBev = _blDraft.some(l => l.include && l.merc === 'bev');
 
@@ -4652,12 +4701,19 @@ function renderBLIntegrationModal() {
         <tbody>${rows}</tbody>
       </table>
     </div>
+    ${isRetour ? `
+    <div style="padding:10px 16px;background:var(--danger-light);border:1px solid var(--danger);border-radius:var(--radius);margin-top:14px;font-size:12px;color:var(--danger);display:flex;align-items:center;gap:8px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <strong>Bulletin de retour</strong> — ${nbIncluded} ligne(s) seront <strong>soustraites du stock</strong>, valorisées au CUMP courant (règle CDC).
+    </div>` : `
     <div style="margin-top:14px; padding:10px 14px; background:var(--phar-navy-faint); border-radius:var(--radius); font-size:12px; color:var(--phar-navy);">
       <strong>${nbIncluded}</strong> ligne(s) à intégrer · <strong>${nbNew}</strong> nouvel(le)(s) article(s) créé(s) · le reste sera mis à jour (stock incrémenté + CUMP recalculé).
-    </div>`;
+    </div>`}`;
 
   const btn = document.getElementById('bl-integ-confirm');
-  btn.textContent = `Valider l'entrée en stock (${nbIncluded})`;
+  btn.textContent = isRetour ? `↩ Valider le retour (−${nbIncluded})` : `Valider l'entrée en stock (${nbIncluded})`;
+  btn.style.background    = isRetour ? 'var(--danger)' : '';
+  btn.style.borderColor   = isRetour ? 'var(--danger)' : '';
   btn.disabled = nbIncluded === 0;
 }
 
@@ -4669,74 +4725,129 @@ function integrateBLToInventory() {
     if (!confirm('Certaines lignes ont une quantité nulle — elles seront ignorées. Continuer ?')) return;
   }
 
+  // Détecter si c'est un bulletin de retour
+  const activeBL  = window._activeBLId ? pharBLs.find(b => b.id === window._activeBLId) : null;
+  const isRetour  = activeBL?.type_document === 'bulletin_retour';
+
   let created = 0, updated = 0;
   const ts = new Date().toISOString();
 
   lines.forEach(l => {
     if (l.quantite <= 0) return;
-    const merc = l.merc;
-    const store = pharStores[merc];
+    const merc    = l.merc;
+    const store   = pharStores[merc];
     const posDest = _blPos[merc] || POS_DEFINITIONS[merc][0];
     let item = matchInventoryItem(store, l.designation);
     let cumpAvant, cumpApres, stockAvant;
 
-    if (item) {
+    if (isRetour) {
+      // ── BULLETIN DE RETOUR ─────────────────────────────────
+      // Règle CDC : valorisé au CUMP courant, pas au prix d'achat saisi
+      // Chercher dans les deux stores si non trouvé dans la mercuriale saisie
+      if (!item) {
+        const otherMerc  = merc === 'food' ? 'bev' : 'food';
+        const otherStore = pharStores[otherMerc];
+        const otherItem  = matchInventoryItem(otherStore, l.designation);
+        if (otherItem) {
+          item = otherItem;
+        } else {
+          if (typeof showToast === 'function')
+            showToast(`⚠ Article "${l.designation}" introuvable en stock — ligne ignorée.`, 'error');
+          return;
+        }
+      }
       stockAvant = computeItemTotal(item);
-      cumpAvant = item.cump != null ? item.cump : item.pu;
-      cumpApres = recalcCUMP(stockAvant, cumpAvant, l.quantite, l.prix);
-      item.pos[posDest] = (item.pos[posDest] || 0) + l.quantite;
-      item.cump = cumpApres;
-      item.historique_prix.push({ date: _blMeta.date, prix: l.prix, fournisseur: _blMeta.fournisseur, bl_numero: _blMeta.numero });
-      updated++;
-    } else {
-      // Création d'un nouvel article dans la mercuriale ciblée
-      stockAvant = 0;
-      cumpAvant = 0;
-      cumpApres = l.prix;
-      const posObj = Object.fromEntries(POS_DEFINITIONS[merc].map(p => [p, 0]));
-      posObj[posDest] = l.quantite;
-      item = ensureCostFields({
-        groupe: merc === 'food' ? 'Food' : mapBevGroupe(l.categorie),
-        categorie: merc === 'food' ? (l.categorie || 'Autres') : undefined,
-        article: l.designation,
-        mill: merc === 'bev' ? '' : undefined,
-        unite: l.unite,
-        fournisseur: _blMeta.fournisseur,
-        pu: l.prix,
-        pos: posObj,
-        mois_m1: 0,
-        cump: l.prix,
-        prix_reference: l.prix,
-        historique_prix: [{ date: _blMeta.date, prix: l.prix, fournisseur: _blMeta.fournisseur, bl_numero: _blMeta.numero }],
-        lightspeed_sku: null
-      });
-      store.push(item);
-      created++;
-    }
+      cumpAvant  = item.cump != null ? item.cump : item.pu;
+      cumpApres  = cumpAvant; // Le CUMP ne change pas sur un retour (règle CDC)
 
-    // Journalise l'entrée en stock
-    stockMovements.unshift({
-      id: 'mv_' + Math.random().toString(36).slice(2, 10),
-      ts,
-      date: _blMeta.date,
-      mercuriale: merc,
-      article: l.designation,
-      fournisseur: _blMeta.fournisseur,
-      bl_numero: _blMeta.numero,
-      quantite: l.quantite,
-      unite: l.unite,
-      prix_unitaire: l.prix,
-      pos: posDest,
-      stock_avant: stockAvant,
-      cump_avant: cumpAvant,
-      cump_apres: cumpApres
-    });
+      // Trouver la mercuriale réelle de l'article (peut différer de l.merc si cross-store)
+      const itemMerc    = pharStores['food'].includes(item) ? 'food' : 'bev';
+      // Sélectionner le POS : priorité au POS configuré s'il a du stock, sinon POS le plus stocké
+      const preferredPos = _blPos[itemMerc] || POS_DEFINITIONS[itemMerc][0];
+      const realPosDest = (item.pos[preferredPos] || 0) > 0
+        ? preferredPos
+        : (Object.entries(item.pos).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1])[0]?.[0] || preferredPos);
+
+      // Soustraire du stock (plancher à 0)
+      item.pos[realPosDest] = Math.max(0, (item.pos[realPosDest] || 0) - l.quantite);
+      updated++;
+
+      // Journalise le retour (quantité négative)
+      stockMovements.unshift({
+        id:           'mv_' + Math.random().toString(36).slice(2, 10),
+        ts,
+        date:         _blMeta.date,
+        mercuriale:   itemMerc,
+        article:      l.designation,
+        fournisseur:  _blMeta.fournisseur,
+        bl_numero:    _blMeta.numero,
+        type:         'retour',
+        quantite:     -l.quantite,         // négatif dans le journal
+        unite:        l.unite,
+        prix_unitaire: cumpAvant,           // valorisé au CUMP courant
+        pos:          realPosDest,
+        stock_avant:  stockAvant,
+        cump_avant:   cumpAvant,
+        cump_apres:   cumpApres
+      });
+
+    } else {
+      // ── BON DE LIVRAISON (entrée) ───────────────────────────
+      if (item) {
+        stockAvant = computeItemTotal(item);
+        cumpAvant  = item.cump != null ? item.cump : item.pu;
+        cumpApres  = recalcCUMP(stockAvant, cumpAvant, l.quantite, l.prix);
+        item.pos[posDest] = (item.pos[posDest] || 0) + l.quantite;
+        item.cump  = cumpApres;
+        item.historique_prix.push({ date: _blMeta.date, prix: l.prix, fournisseur: _blMeta.fournisseur, bl_numero: _blMeta.numero });
+        updated++;
+      } else {
+        stockAvant = 0; cumpAvant = 0; cumpApres = l.prix;
+        const posObj = Object.fromEntries(POS_DEFINITIONS[merc].map(p => [p, 0]));
+        posObj[posDest] = l.quantite;
+        item = ensureCostFields({
+          groupe:          merc === 'food' ? 'Food' : mapBevGroupe(l.categorie),
+          categorie:       merc === 'food' ? (l.categorie || 'Autres') : undefined,
+          article:         l.designation,
+          mill:            merc === 'bev' ? '' : undefined,
+          unite:           l.unite,
+          fournisseur:     _blMeta.fournisseur,
+          pu:              l.prix,
+          pos:             posObj,
+          mois_m1:         0,
+          cump:            l.prix,
+          prix_reference:  l.prix,
+          historique_prix: [{ date: _blMeta.date, prix: l.prix, fournisseur: _blMeta.fournisseur, bl_numero: _blMeta.numero }],
+          lightspeed_sku:  null
+        });
+        store.push(item);
+        created++;
+      }
+
+      stockMovements.unshift({
+        id:           'mv_' + Math.random().toString(36).slice(2, 10),
+        ts,
+        date:         _blMeta.date,
+        mercuriale:   merc,
+        article:      l.designation,
+        fournisseur:  _blMeta.fournisseur,
+        bl_numero:    _blMeta.numero,
+        type:         'entree',
+        quantite:     l.quantite,
+        unite:        l.unite,
+        prix_unitaire: l.prix,
+        pos:          posDest,
+        stock_avant:  stockAvant,
+        cump_avant:   cumpAvant,
+        cump_apres:   cumpApres
+      });
+    }
   });
 
   saveStores();
   closeBLIntegrationModal();
 
-  // Marque le BL source comme intégré au stock (Étape 1)
+  // Marque le BL source comme intégré au stock
   if (window._activeBLId) {
     const srcBL = pharBLs.find(b => b.id === window._activeBLId);
     if (srcBL) {
@@ -4754,11 +4865,16 @@ function integrateBLToInventory() {
   navOpenGroup('inventaire');
   _navActivateModule('inventaire', null);
 
-  // Affiche la mercuriale qui a reçu le plus de lignes
   const targetMerc = lines.filter(l => l.merc === 'bev').length > lines.filter(l => l.merc === 'food').length ? 'bev' : 'food';
   switchMercuriale(targetMerc);
 
-  setTimeout(() => alert(`✓ Entrée en stock enregistrée\n\nBL ${_blMeta.numero || '—'} · ${_blMeta.fournisseur || '—'}\n${created} article(s) créé(s) · ${updated} mis à jour\nCUMP recalculé et journalisé.\n\nConsultez « Journal des entrées » pour le détail.`), 150);
+  if (typeof showToast === 'function') {
+    if (isRetour) {
+      showToast(`↩ Retour enregistré · ${_blMeta.numero || '—'} · ${updated} article(s) crédité(s) · CUMP inchangé`, 'success');
+    } else {
+      showToast(`✓ Entrée en stock · BL ${_blMeta.numero || '—'} · ${created} créé(s) · ${updated} mis à jour · CUMP recalculé`, 'success');
+    }
+  }
 }
 
 /* ---------- Journal des mouvements de stock ---------- */
@@ -4780,7 +4896,10 @@ function renderMovementsModal() {
   const rows = stockMovements.map(m => `
     <tr>
       <td style="font-size:11px; color:var(--gray-500);">${m.date || '—'}</td>
-      <td><span class="badge ${m.mercuriale === 'bev' ? 'badge-info' : 'badge-success'}">${m.mercuriale === 'bev' ? 'Boissons' : 'Food'}</span></td>
+      <td>
+        <span class="badge ${m.mercuriale === 'bev' ? 'badge-info' : 'badge-success'}">${m.mercuriale === 'bev' ? 'Boissons' : 'Food'}</span>
+        ${m.type === 'retour' ? '<span class="badge badge-danger" style="margin-left:4px;">Retour</span>' : ''}
+      </td>
       <td><strong>${m.article}</strong><div style="font-size:10px; color:var(--gray-500);">${m.pos}</div></td>
       <td style="font-size:11px;">${m.fournisseur || '—'}</td>
       <td style="font-size:11px;">${m.bl_numero || '—'}</td>
@@ -4833,6 +4952,7 @@ function switchAchatsTab(tab) {
   const pane = document.getElementById('achats-pane-' + tab);
   if (pane) pane.classList.add('active');
   if (tab === 'bulletins') renderBLRepository();
+  if (tab === 'recap') renderAchatsRecap();
   if (tab === 'rapprochement' && typeof renderFC2BLRapprochement === 'function') renderFC2BLRapprochement();
 }
 
@@ -4933,6 +5053,230 @@ function updateReconcilePanel() {
   else                    { box.classList.add('bad');  status.textContent = 'Écart à vérifier'; }
 }
 
+/* ============================================================
+   RÉCAPITULATIF ACHATS — BL / Retours / Factures
+   ============================================================ */
+function renderAchatsRecap() {
+  const host = document.getElementById('achats-recap-content');
+  if (!host) return;
+
+  const bls      = pharBLs || [];
+  const factures = (() => {
+    try { return JSON.parse(localStorage.getItem('phar_fc_factures_v1')) || []; } catch(e) { return []; }
+  })();
+
+  // ─── Catégories BL ──────────────────────────────────────────
+  const blAR      = bls.filter(b => b.statut === 'a_rapprocher'  && b.type_document !== 'bulletin_retour' && b.type_document !== 'facture');
+  const blIS      = bls.filter(b => b.statut === 'integre_stock' && b.type_document !== 'bulletin_retour' && b.type_document !== 'facture');
+  const blRappr   = bls.filter(b => b.statut === 'rapproche'     && b.type_document !== 'bulletin_retour' && b.type_document !== 'facture');
+  const retours   = bls.filter(b => b.type_document === 'bulletin_retour');
+  const facSeules = bls.filter(b => b.type_document === 'facture');   // factures scannées non consolidées
+
+  const sumHT = arr => arr.reduce((s, b) => s + (b.total_ht || 0), 0);
+  const fmt   = n => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+  const fmtK  = n => n >= 1000 ? (n/1000).toFixed(1) + "k" : fmt(n);
+
+  // ─── KPI chips ──────────────────────────────────────────────
+  const kpiChip = (label, count, amount, color, bgColor, icon) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;background:${bgColor};border:1px solid ${color}22;border-radius:var(--radius-lg);min-width:180px;">
+      <div style="width:36px;height:36px;background:${color}22;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:${color};">${icon}</div>
+      <div>
+        <div style="font-family:'Archivo';font-weight:800;font-size:22px;color:${color};line-height:1;font-variant-numeric:tabular-nums;">${count}</div>
+        <div style="font-size:11px;font-weight:700;color:${color};opacity:.8;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;">${label}</div>
+        ${amount > 0 ? `<div style="font-size:11px;color:${color};opacity:.65;margin-top:1px;">${fmtK(amount)} CHF HT</div>` : ''}
+      </div>
+    </div>`;
+
+  // ─── Ligne de BL dans une section ───────────────────────────
+  const blRow = (bl, showLink) => {
+    const isRetour = bl.type_document === 'bulletin_retour';
+    const isFac    = bl.type_document === 'facture';
+    const typeTag  = isRetour
+      ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:2px;background:var(--danger-light);color:var(--danger);text-transform:uppercase;letter-spacing:.05em;">RETOUR</span>`
+      : isFac
+      ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:2px;background:var(--phar-navy-faint);color:var(--phar-navy);text-transform:uppercase;letter-spacing:.05em;">FACTURE</span>`
+      : '';
+    const sourceBadge = bl.source === 'manuel'
+      ? `<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--gray-100);color:var(--gray-500);border:1px solid var(--gray-200);">MANUEL</span>`
+      : '';
+    const facLink = showLink && bl.facture_id
+      ? `<span style="font-size:11px;color:var(--phar-navy);font-weight:600;">→ ${factures.find(f=>f.id===bl.facture_id)?.ref || bl.facture_id}</span>`
+      : '';
+    return `
+      <tr>
+        <td style="padding:10px 14px;font-size:12px;color:var(--gray-500);">${bl.date || '—'}</td>
+        <td style="padding:10px 8px;font-weight:600;font-size:13px;">
+          ${bl.fournisseur || '—'}
+          <div style="display:flex;gap:4px;margin-top:3px;">${typeTag}${sourceBadge}</div>
+        </td>
+        <td style="padding:10px 8px;font-size:12px;color:var(--gray-500);">${bl.numero || '—'}</td>
+        <td style="padding:10px 8px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;">${fmt(bl.total_ht || 0)}</td>
+        <td style="padding:10px 8px;text-align:right;font-variant-numeric:tabular-nums;color:var(--gray-500);">${fmt(bl.total_ttc || 0)}</td>
+        <td style="padding:10px 14px;">${facLink}</td>
+      </tr>`;
+  };
+
+  // ─── Section générique ────────────────────────────────────────
+  const section = (title, color, items, showLink, emptyMsg, extraHeader = '') => {
+    if (!items.length) return `
+      <div style="margin-bottom:24px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="width:4px;height:20px;background:${color};border-radius:2px;"></div>
+          <div style="font-family:'Archivo';font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-700);">${title}</div>
+          <div style="flex:1;height:1px;background:var(--gray-200);"></div>
+          <div style="font-size:12px;color:var(--gray-400);">Aucun</div>
+        </div>
+      </div>`;
+
+    const totalHT = sumHT(items);
+    return `
+      <div style="margin-bottom:28px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="width:4px;height:20px;background:${color};border-radius:2px;"></div>
+          <div style="font-family:'Archivo';font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-700);">${title}</div>
+          <div style="flex:1;height:1px;background:var(--gray-200);"></div>
+          <div style="font-size:12px;color:var(--gray-500);font-variant-numeric:tabular-nums;font-weight:600;">${items.length} doc · ${fmt(totalHT)} CHF HT</div>
+          ${extraHeader}
+        </div>
+        <div style="border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:var(--gray-50);">
+                <th style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);width:100px;">Date</th>
+                <th style="padding:8px 8px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);">Fournisseur</th>
+                <th style="padding:8px 8px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);">N°</th>
+                <th style="padding:8px 8px;text-align:right;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);">HT (CHF)</th>
+                <th style="padding:8px 8px;text-align:right;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);">TTC (CHF)</th>
+                <th style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-500);">${showLink ? 'Facture liée' : ''}</th>
+              </tr>
+            </thead>
+            <tbody>${items.map(b => blRow(b, showLink)).join('')}</tbody>
+          </table>
+        </div>
+      </div>`;
+  };
+
+  // ─── Section factures consolidées ────────────────────────────
+  const statutBadge = { concordant:'badge-success', ecart_mineur:'badge-warning', ecart_significatif:'badge-danger' };
+  const statutLabel = { concordant:'Concordant', ecart_mineur:'Écart mineur', ecart_significatif:'Écart significatif' };
+
+  const facturesSection = () => {
+    if (!factures.length) return `
+      <div style="margin-bottom:28px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="width:4px;height:20px;background:var(--phar-navy);border-radius:2px;"></div>
+          <div style="font-family:'Archivo';font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-700);">Factures consolidées</div>
+          <div style="flex:1;height:1px;background:var(--gray-200);"></div>
+          <div style="font-size:12px;color:var(--gray-400);">Aucune</div>
+        </div>
+      </div>`;
+
+    const rows = factures.map(f => {
+      const ecartColor = f.ecart_ht === null ? 'var(--gray-400)'
+        : Math.abs(f.ecart_ht) <= 0.05 ? 'var(--success)'
+        : Math.abs((f.ecart_ht||0) / (f.fac_ht||1) * 100) <= 1 ? 'var(--warning)'
+        : 'var(--danger)';
+      const blsOfFac = bls.filter(b => b.facture_id === f.id);
+      return `
+        <tr>
+          <td style="padding:11px 14px;font-size:12px;color:var(--gray-500);">${f.date || '—'}</td>
+          <td style="padding:11px 8px;font-weight:600;">${f.fournisseurs?.join(', ') || '—'}</td>
+          <td style="padding:11px 8px;font-size:12px;color:var(--phar-navy);font-weight:600;">${f.ref || '—'}</td>
+          <td style="padding:11px 8px;text-align:center;">
+            <span class="badge badge-info">${f.nb_bl} BL</span>
+            ${blsOfFac.filter(b=>b.type_document==='bulletin_retour').length
+              ? `<span class="badge badge-danger" style="margin-left:4px;">${blsOfFac.filter(b=>b.type_document==='bulletin_retour').length} retour(s)</span>` : ''}
+          </td>
+          <td style="padding:11px 8px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;">${_reconCHF(f.bl_ht)}</td>
+          <td style="padding:11px 8px;text-align:right;font-variant-numeric:tabular-nums;color:${f.fac_ht!==null?'var(--gray-900)':'var(--gray-400)'};">${f.fac_ht!==null?_reconCHF(f.fac_ht):'—'}</td>
+          <td style="padding:11px 8px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:${ecartColor};">
+            ${f.ecart_ht!==null ? (f.ecart_ht>=0?'+':'')+_reconCHF(f.ecart_ht) : '—'}
+          </td>
+          <td style="padding:11px 14px;"><span class="badge ${statutBadge[f.statut]||'badge-info'}">${statutLabel[f.statut]||f.statut}</span></td>
+          <td style="padding:11px 14px;text-align:right;">
+            <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="_fcDeleteFacture('${f.id}');renderAchatsRecap();" title="Supprimer">✕</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    const totalBLHT  = factures.reduce((s,f) => s+(f.bl_ht||0), 0);
+    const totalFacHT = factures.filter(f=>f.fac_ht!==null).reduce((s,f) => s+(f.fac_ht||0), 0);
+
+    return `
+      <div style="margin-bottom:28px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="width:4px;height:20px;background:var(--phar-navy);border-radius:2px;"></div>
+          <div style="font-family:'Archivo';font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-700);">Factures consolidées</div>
+          <div style="flex:1;height:1px;background:var(--gray-200);"></div>
+          <div style="font-size:12px;color:var(--gray-500);font-weight:600;">${factures.length} facture(s) · ${_reconCHF(totalBLHT)} CHF HT BL</div>
+        </div>
+        <div style="border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:var(--phar-navy);">
+                <th style="padding:10px 14px;text-align:left;color:white;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Date</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Fournisseur(s)</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Réf. facture</th>
+                <th style="padding:10px 8px;text-align:center;color:white;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Docs inclus</th>
+                <th style="padding:10px 8px;text-align:right;color:white;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">BL HT</th>
+                <th style="padding:10px 8px;text-align:right;color:white;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Facture HT</th>
+                <th style="padding:10px 8px;text-align:right;color:white;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Écart HT</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Statut</th>
+                <th style="padding:10px 14px;width:40px;"></th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+            <tfoot>
+              <tr style="background:var(--phar-navy-pale);border-top:2px solid var(--phar-navy);">
+                <td colspan="4" style="padding:10px 14px;font-weight:700;color:var(--phar-navy);">Total</td>
+                <td style="padding:10px 8px;text-align:right;font-weight:800;font-family:'Archivo';color:var(--phar-navy);font-variant-numeric:tabular-nums;">${_reconCHF(totalBLHT)}</td>
+                <td style="padding:10px 8px;text-align:right;font-weight:800;font-family:'Archivo';color:var(--phar-navy);font-variant-numeric:tabular-nums;">${totalFacHT>0?_reconCHF(totalFacHT):'—'}</td>
+                <td colspan="3"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>`;
+  };
+
+  // ─── Assemblage final ─────────────────────────────────────────
+  const nonRappr = [...blAR, ...blIS];
+  const totalAll = sumHT(bls);
+
+  host.innerHTML = `
+    <!-- KPI chips -->
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:32px;">
+      ${kpiChip('À rapprocher', blAR.length + blIS.length, sumHT(nonRappr), 'var(--warning)', 'var(--warning-light)',
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>')}
+      ${kpiChip('Bulletins de retour', retours.length, sumHT(retours), 'var(--danger)', 'var(--danger-light)',
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>')}
+      ${kpiChip('BL rapprochés', blRappr.length, sumHT(blRappr), 'var(--success)', 'var(--success-light)',
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>')}
+      ${kpiChip('Factures consolidées', factures.length, factures.reduce((s,f)=>s+(f.fac_ht||f.bl_ht||0),0), 'var(--phar-navy)', 'var(--phar-navy-faint)',
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>')}
+      ${facSeules.length ? kpiChip('Factures scannées', facSeules.length, sumHT(facSeules), 'var(--gray-500)', 'var(--gray-100)',
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V4"/><path d="M9 21V9M15 21V9M3 9h18"/></svg>') : ''}
+    </div>
+
+    <!-- Section 1 : BL non rapprochés -->
+    ${section('BL à rapprocher', 'var(--warning)', nonRappr, false, '',
+      `<button class="btn btn-outline btn-sm" onclick="switchAchatsTab('bulletins')" style="margin-left:8px;">
+        Gérer les BL
+      </button>`)}
+
+    <!-- Section 2 : Bulletins de retour -->
+    ${section('Bulletins de retour', 'var(--danger)', retours, retours.some(r=>r.statut==='rapproche'), '')}
+
+    <!-- Section 3 : BL rapprochés -->
+    ${section('BL rapprochés', 'var(--success)', blRappr, true, '')}
+
+    <!-- Section 4 : Factures scannées seules (non consolidées) -->
+    ${facSeules.length ? section('Factures scannées (non consolidées)', 'var(--gray-400)', facSeules, false, '') : ''}
+
+    <!-- Section 5 : Factures consolidées -->
+    ${facturesSection()}`;
+}
+
 function renderBLRepository() {
   const host = document.getElementById('bl-repo-table');
   if (!host) return;
@@ -4971,11 +5315,20 @@ function renderBLRepository() {
             <td>${bl.date || '—'}</td>
             <td>
               <strong>${bl.fournisseur || '—'}</strong>
+              ${bl.type_document === 'bulletin_retour'
+                ? `<span style="margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.06em;
+                     color:var(--danger);background:var(--danger-light);
+                     border:1px solid var(--danger);padding:1px 5px;border-radius:3px;">RETOUR</span>`
+                : ''}
               ${bl.source === 'phar_marketplace'
                 ? `<span style="margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.06em;
                      color:var(--phar-navy);background:var(--phar-navy-faint);
-                     border:1px solid var(--phar-navy-pale);padding:1px 5px;border-radius:3px;">
-                     MARKETPLACE</span>`
+                     border:1px solid var(--phar-navy-pale);padding:1px 5px;border-radius:3px;">MARKETPLACE</span>`
+                : ''}
+              ${bl.source === 'manuel'
+                ? `<span style="margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.06em;
+                     color:var(--gray-500);background:var(--gray-100);
+                     border:1px solid var(--gray-300);padding:1px 5px;border-radius:3px;">MANUEL</span>`
                 : ''}
             </td>
             <td>${bl.numero || '—'}</td>
@@ -5019,6 +5372,251 @@ function deleteBL(blId) {
   pharBLs = pharBLs.filter(b => b.id !== blId);
   saveStores();
   renderBLRepository();
+}
+
+/* ============================================================
+   CRÉATION MANUELLE DE BL (Étape 1bis CDC)
+   ============================================================ */
+let _mblLines = [];
+let _mblType  = 'bon_livraison';
+
+function _mblCheckFournisseur(nom) {
+  const hint     = document.getElementById('mbl-four-hint');
+  const hintText = document.getElementById('mbl-four-hint-text');
+  if (!hint || !hintText) return;
+
+  const sup = (typeof acFindFournisseur === 'function') ? acFindFournisseur(nom) : null;
+  const val = sup ? (parseFloat(sup.rabais_val) || 0) : 0;
+
+  if (sup && val > 0) {
+    hintText.textContent = `Condition ${sup.nom} détectée — rabais ${val}${sup.rabais_type === 'chf' ? ' CHF' : '%'} sera appliqué automatiquement`;
+    hint.style.display = 'flex';
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
+function _toggleMblDropdown() {
+  const dd = document.getElementById('mbl-type-dropdown');
+  if (!dd) return;
+  const open = dd.style.display === 'flex';
+  dd.style.display = open ? 'none' : 'flex';
+  dd.style.flexDirection = 'column';
+  if (!open) {
+    const close = () => { dd.style.display = 'none'; document.removeEventListener('click', close); };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+}
+
+function openManualBLModal(type) {
+  _mblType  = type || 'bon_livraison';
+  _mblLines = [];
+
+  // Adapter le titre, le badge et la bannière selon le type
+  const isRetour = _mblType === 'bulletin_retour';
+  const title  = document.getElementById('mbl-modal-title');
+  const badge  = document.getElementById('mbl-type-badge');
+  const banner = document.getElementById('mbl-retour-banner');
+  const refRow = document.getElementById('mbl-reference-row');
+  const saveBtn = document.getElementById('mbl-save-btn');
+
+  if (title)  title.textContent  = isRetour ? 'Créer un bulletin de retour' : 'Créer un bon de livraison manuellement';
+  if (badge) {
+    badge.textContent  = isRetour ? 'RETOUR' : 'BL';
+    badge.style.background = isRetour ? 'var(--danger-light)' : 'var(--phar-navy-faint)';
+    badge.style.color      = isRetour ? 'var(--danger)' : 'var(--phar-navy)';
+  }
+  if (banner) banner.style.display = isRetour ? 'flex' : 'none';
+  if (refRow) refRow.style.display  = isRetour ? 'block' : 'none';
+  if (saveBtn) saveBtn.textContent = isRetour ? '⬅ Enregistrer le retour' : 'Enregistrer le BL';
+
+  document.getElementById('mbl-fournisseur').value = '';
+  document.getElementById('mbl-numero').value      = '';
+  document.getElementById('mbl-date').value        = new Date().toLocaleDateString('fr-CH');
+  const refInput = document.getElementById('mbl-reference');
+  if (refInput) refInput.value = '';
+
+  _mblAddLine();
+  _mblRenderLines();
+  document.getElementById('manual-bl-modal').classList.add('visible');
+  setTimeout(() => document.getElementById('mbl-fournisseur').focus(), 80);
+}
+
+function closeManualBLModal() {
+  document.getElementById('manual-bl-modal').classList.remove('visible');
+}
+
+function _mblAddLine() {
+  _mblLines.push({ designation: '', quantite: '', unite: 'kg', prix: '', tva: 2.6 });
+  _mblRenderLines();
+  // Focus la désignation de la dernière ligne
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('#mbl-lines-tbody input[data-mbl-designation]');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }, 50);
+}
+
+function _mblRemoveLine(idx) {
+  _mblLines.splice(idx, 1);
+  _mblRenderLines();
+}
+
+function _mblRenderLines() {
+  const tbody = document.getElementById('mbl-lines-tbody');
+  if (!tbody) return;
+
+  if (!_mblLines.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gray-400);font-size:13px;">Aucune ligne — cliquez « Ajouter une ligne ».</td></tr>`;
+    _mblUpdateTotals();
+    return;
+  }
+
+  tbody.innerHTML = _mblLines.map((l, idx) => {
+    const totalHT = (parseFloat(l.quantite) || 0) * (parseFloat(l.prix) || 0);
+    return `<tr>
+      <td style="padding:5px 8px;">
+        <input type="text" value="${(l.designation||'').replace(/"/g,'&quot;')}" placeholder="Désignation de l'article"
+               data-mbl-designation="${idx}"
+               style="width:100%;min-width:160px;font-size:12px;"
+               oninput="_mblLines[${idx}].designation=this.value">
+      </td>
+      <td style="padding:5px 6px;">
+        <input type="number" value="${l.quantite}" placeholder="0" step="0.001" min="0"
+               style="width:70px;text-align:right;font-size:12px;"
+               oninput="_mblLines[${idx}].quantite=this.value;_mblUpdateTotals()">
+      </td>
+      <td style="padding:5px 6px;">
+        <input type="text" value="${l.unite}" placeholder="kg"
+               style="width:58px;font-size:12px;"
+               oninput="_mblLines[${idx}].unite=this.value">
+      </td>
+      <td style="padding:5px 6px;">
+        <input type="number" value="${l.prix}" placeholder="0.00" step="0.01" min="0"
+               style="width:88px;text-align:right;font-size:12px;font-weight:600;"
+               oninput="_mblLines[${idx}].prix=this.value;_mblUpdateTotals()">
+      </td>
+      <td style="padding:5px 6px;text-align:center;">
+        <select style="font-size:12px;padding:5px 6px;width:80px;"
+                onchange="_mblLines[${idx}].tva=parseFloat(this.value);_mblUpdateTotals()">
+          <option value="2.6"  ${l.tva===2.6 ?'selected':''}>2.6 %</option>
+          <option value="8.1"  ${l.tva===8.1 ?'selected':''}>8.1 %</option>
+          <option value="0"    ${l.tva===0   ?'selected':''}>0 %</option>
+        </select>
+      </td>
+      <td style="padding:5px 8px;text-align:right;font-weight:700;font-size:12px;font-variant-numeric:tabular-nums;color:var(--gray-900);">
+        ${totalHT > 0 ? totalHT.toFixed(2) : '—'}
+      </td>
+      <td style="padding:5px 6px;text-align:center;">
+        <button class="btn-remove" onclick="_mblRemoveLine(${idx})" title="Supprimer la ligne">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  _mblUpdateTotals();
+}
+
+function _mblUpdateTotals() {
+  let totalHT = 0, totalTVA = 0;
+  _mblLines.forEach(l => {
+    const ht  = (parseFloat(l.quantite) || 0) * (parseFloat(l.prix) || 0);
+    const tva = ht * ((parseFloat(l.tva) || 0) / 100);
+    totalHT  += ht;
+    totalTVA += tva;
+  });
+  const totalTTC = totalHT + totalTVA;
+  const fmt = n => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = fmt(v) + ' CHF'; };
+  set('mbl-total-ht',  totalHT);
+  set('mbl-total-tva', totalTVA);
+  set('mbl-total-ttc', totalTTC);
+}
+
+function saveManualBL() {
+  const fournisseur = document.getElementById('mbl-fournisseur').value.trim();
+  const numero      = document.getElementById('mbl-numero').value.trim();
+  const date        = document.getElementById('mbl-date').value.trim();
+
+  if (!fournisseur) {
+    if (typeof showToast === 'function') showToast('Le fournisseur est requis.', 'error');
+    else alert('Le fournisseur est requis.');
+    return;
+  }
+  if (!date) {
+    if (typeof showToast === 'function') showToast('La date est requise.', 'error');
+    else alert('La date est requise.');
+    return;
+  }
+
+  const validLines = _mblLines.filter(l =>
+    l.designation.trim() && (parseFloat(l.quantite) || 0) > 0 && (parseFloat(l.prix) || 0) > 0
+  );
+  if (!validLines.length) {
+    if (typeof showToast === 'function') showToast('Ajoutez au moins une ligne valide (désignation, quantité et prix requis).', 'error');
+    else alert('Ajoutez au moins une ligne valide.');
+    return;
+  }
+
+  // Calcul des totaux
+  let totalHT = 0, totalTVA = 0;
+  const articles = validLines.map(l => {
+    const qte  = parseFloat(l.quantite) || 0;
+    const prix = parseFloat(l.prix) || 0;
+    const ht   = qte * prix;
+    const tva  = ht * ((parseFloat(l.tva) || 0) / 100);
+    totalHT  += ht;
+    totalTVA += tva;
+    return {
+      designation:      l.designation.trim(),
+      quantite:         qte,
+      unite:            l.unite.trim() || 'pce',
+      prix_unitaire_ht: prix,
+      total_ht:         ht,
+      tva_taux:         parseFloat(l.tva) || 0,
+      ref:              '',
+      categorie_suggeree: (typeof fcAutoCategory === 'function' ? fcAutoCategory(l.designation) : 'Autres')
+    };
+  });
+
+  const parsed = {
+    type_document:  _mblType,
+    source:         'manuel',
+    fournisseur:    fournisseur,
+    numero:         numero,
+    bl_reference:   document.getElementById('mbl-reference')?.value.trim() || '',
+    date_document:  date,
+    articles,
+    total_ht:       totalHT,
+    total_tva:      totalTVA,
+    total_ttc:      totalHT + totalTVA,
+    devise:         'CHF',
+    notes:          ''
+  };
+
+  const bl = persistScannedBL(parsed, '');
+  bl.source = 'manuel';
+
+  // Appliquer automatiquement la condition de rabais du fournisseur si configurée
+  let condApplied = false;
+  if (typeof _blApplyFournisseurCondition === 'function') {
+    condApplied = _blApplyFournisseurCondition(bl, true);
+    if (condApplied && typeof _blRecomputeNet === 'function') {
+      _blRecomputeNet(bl);
+    }
+  }
+
+  saveStores();
+  closeManualBLModal();
+  renderBLRepository();
+  switchAchatsTab('bulletins');
+
+  const typeLabel = _mblType === 'bulletin_retour' ? 'Bulletin de retour' : 'BL';
+  const condMsg   = condApplied
+    ? ` · remise ${bl.rabais_global_val}${bl.rabais_global_type === 'chf' ? ' CHF' : '%'} appliquée`
+    : '';
+  if (typeof showToast === 'function')
+    showToast(`✓ ${typeLabel} ${numero || '—'} · ${fournisseur} enregistré (${validLines.length} ligne(s))${condMsg}`, 'success');
 }
 
 function resetLocalData() {
@@ -5070,8 +5668,109 @@ function injectBLModals() {
     </div>`;
   document.body.appendChild(wrap);
 
+  // Modal : Création manuelle d'un BL
+  wrap.innerHTML += `
+    <div class="modal-backdrop" id="manual-bl-modal">
+      <div class="modal" style="max-width:860px;">
+        <div class="modal-header" id="mbl-modal-header">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="modal-title" id="mbl-modal-title">Créer un bon de livraison manuellement</div>
+            <span id="mbl-type-badge" style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:3px;background:var(--phar-navy-faint);color:var(--phar-navy);">BL</span>
+          </div>
+          <button class="modal-close" onclick="closeManualBLModal()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Bannière retour -->
+          <div id="mbl-retour-banner" style="display:none;padding:10px 16px;background:var(--danger-light);border:1px solid var(--danger);border-radius:var(--radius);margin-bottom:16px;display:none;align-items:center;gap:10px;font-size:13px;color:var(--danger);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>Les quantités seront <strong>soustraites du stock</strong> et valorisées au <strong>CUMP courant</strong> (règle CDC — non au prix d'achat saisi).</span>
+          </div>
+          <!-- En-tête BL -->
+          <div class="form-grid" style="grid-template-columns:2fr 1fr 1fr;gap:16px;margin-bottom:16px;">
+            <div>
+              <label class="field-label">Fournisseur *</label>
+              <input type="text" id="mbl-fournisseur" placeholder="Ex : Merat SA" autocomplete="off"
+                     oninput="_mblCheckFournisseur(this.value)">
+              <div id="mbl-four-hint" style="display:none;margin-top:6px;padding:7px 10px;background:var(--success-light);border:1px solid var(--success);border-radius:var(--radius);font-size:11px;color:var(--success);display:none;align-items:center;gap:6px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span id="mbl-four-hint-text"></span>
+              </div>
+            </div>
+            <div>
+              <label class="field-label">N° Document</label>
+              <input type="text" id="mbl-numero" placeholder="Ex : BL-2026-1234">
+            </div>
+            <div>
+              <label class="field-label">Date *</label>
+              <input type="text" id="mbl-date" placeholder="JJ.MM.AAAA">
+            </div>
+          </div>
+          <!-- Référence BL d'origine (retour seulement) -->
+          <div id="mbl-reference-row" style="display:none;margin-bottom:16px;max-width:320px;">
+            <label class="field-label">Réf. BL d'origine (optionnel)</label>
+            <input type="text" id="mbl-reference" placeholder="Ex : BL-2026-0042">
+          </div>
+
+          <!-- Tableau des lignes -->
+          <div style="border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px;">
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px;">
+                <thead>
+                  <tr style="background:var(--phar-navy);">
+                    <th style="padding:10px 12px;text-align:left;color:white;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;min-width:200px;">Désignation *</th>
+                    <th style="padding:10px 12px;text-align:right;color:white;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;width:80px;">Qté *</th>
+                    <th style="padding:10px 12px;text-align:left;color:white;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;width:70px;">Unité</th>
+                    <th style="padding:10px 12px;text-align:right;color:white;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;width:100px;">PU HT *</th>
+                    <th style="padding:10px 12px;text-align:center;color:white;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;width:90px;">TVA %</th>
+                    <th style="padding:10px 12px;text-align:right;color:white;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;width:100px;">Total HT</th>
+                    <th style="width:36px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="mbl-lines-tbody"></tbody>
+              </table>
+            </div>
+            <!-- Ligne + Ajouter -->
+            <div onclick="_mblAddLine()" style="padding:11px 16px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--phar-navy);font-weight:600;font-size:13px;border-top:1px solid var(--gray-200);background:var(--gray-50);transition:background .12s;" onmouseover="this.style.background='var(--phar-navy-faint)'" onmouseout="this.style.background='var(--gray-50)'">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              Ajouter une ligne
+            </div>
+          </div>
+
+          <!-- Totaux -->
+          <div style="display:flex;justify-content:flex-end;">
+            <div style="min-width:300px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px 20px;">
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
+                <span style="color:var(--gray-500);">Total HT</span>
+                <span id="mbl-total-ht" style="font-weight:700;font-variant-numeric:tabular-nums;">0.00 CHF</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
+                <span style="color:var(--gray-500);">Dont TVA</span>
+                <span id="mbl-total-tva" style="font-weight:600;font-variant-numeric:tabular-nums;color:var(--gray-700);">0.00 CHF</span>
+              </div>
+              <div style="height:1px;background:var(--gray-200);margin-bottom:8px;"></div>
+              <div style="display:flex;justify-content:space-between;font-size:15px;">
+                <span style="font-weight:700;color:var(--phar-navy);">Total TTC</span>
+                <span id="mbl-total-ttc" style="font-family:'Archivo';font-weight:800;color:var(--phar-navy);font-variant-numeric:tabular-nums;">0.00 CHF</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeManualBLModal()">Annuler</button>
+          <button class="btn btn-primary" id="mbl-save-btn" onclick="saveManualBL()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+            Enregistrer le BL
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(wrap);
+
   // Fermeture au clic sur le fond
-  ['bl-integ-modal', 'movements-modal'].forEach(id => {
+  ['bl-integ-modal', 'movements-modal', 'manual-bl-modal'].forEach(id => {
     document.getElementById(id).addEventListener('click', (e) => {
       if (e.target.id === id) e.target.classList.remove('visible');
     });
