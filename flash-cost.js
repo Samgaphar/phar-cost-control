@@ -3058,21 +3058,34 @@ function acRenderFournisseurs() {
 
   const confRows = configured.map(f => {
     const st = statFor(f.nom);
-    const hasRab = (parseFloat(f.rabais_val) || 0) > 0;
+    const hasRab  = (parseFloat(f.rabais_val) || 0) > 0;
+    const hasRist = (parseFloat(f.ristourne_pct) || 0) > 0;
     return `<tr>
-      <td><input type="text" value="${(f.nom || '').replace(/"/g, '&quot;')}" onchange="acUpdateFournisseur('${f.id}','nom',this.value)" style="font-weight:700;border:1px solid var(--gray-200);background:var(--white);padding:4px 6px;border-radius:3px;min-width:160px;width:100%;"></td>
+      <td><input type="text" id="four-nom-${f.id}" value="${(f.nom || '').replace(/"/g, '&quot;')}" onchange="acUpdateFournisseur('${f.id}','nom',this.value)" onkeydown="if(event.key==='Enter')acValiderFournisseur('${f.id}')" style="font-weight:700;border:1px solid var(--gray-200);background:var(--white);padding:4px 6px;border-radius:3px;min-width:150px;width:100%;"></td>
       <td style="white-space:nowrap;">
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;">
-          <input type="number" value="${parseFloat(f.rabais_val) || 0}" step="0.01" min="0" onchange="acUpdateFournisseur('${f.id}','rabais_val',this.value)" style="width:60px;height:28px;box-sizing:border-box;text-align:right;${hasRab ? 'color:var(--phar-navy);font-weight:700;' : ''}">
-          <select onchange="acUpdateFournisseur('${f.id}','rabais_type',this.value)" style="width:56px;height:28px;box-sizing:border-box;font-size:11px;border:1px solid var(--gray-200);border-radius:3px;">
+          <input type="number" id="four-rabval-${f.id}" value="${parseFloat(f.rabais_val) || 0}" step="0.01" min="0" onchange="acUpdateFournisseur('${f.id}','rabais_val',this.value)" style="width:56px;height:28px;box-sizing:border-box;text-align:right;${hasRab ? 'color:var(--phar-navy);font-weight:700;' : ''}">
+          <select id="four-rabtype-${f.id}" onchange="acUpdateFournisseur('${f.id}','rabais_type',this.value)" style="width:52px;height:28px;box-sizing:border-box;font-size:11px;border:1px solid var(--gray-200);border-radius:3px;">
             <option value="pct" ${f.rabais_type !== 'chf' ? 'selected' : ''}>%</option>
             <option value="chf" ${f.rabais_type === 'chf' ? 'selected' : ''}>CHF</option>
           </select>
         </div>
       </td>
-      <td><input type="text" value="${(f.notes || '').replace(/"/g, '&quot;')}" placeholder="conditions, contact, délai…" onchange="acUpdateFournisseur('${f.id}','notes',this.value)" style="font-size:11px;border:1px solid var(--gray-200);background:var(--white);padding:4px 6px;border-radius:3px;width:100%;min-width:150px;color:var(--gray-600);"></td>
+      <td style="white-space:nowrap;">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;">
+          <input type="number" id="four-ristpct-${f.id}" value="${parseFloat(f.ristourne_pct) || 0}" step="0.01" min="0" title="Ristourne sur volume (%) — informative, non déduite des BL" onchange="acUpdateFournisseur('${f.id}','ristourne_pct',this.value)" style="width:52px;height:28px;box-sizing:border-box;text-align:right;${hasRist ? 'color:var(--phar-navy);font-weight:700;' : ''}">
+          <span style="font-size:11px;color:var(--gray-400);">% si CA&nbsp;&gt;</span>
+          <input type="number" id="four-ristseuil-${f.id}" value="${parseFloat(f.ristourne_seuil) || 0}" step="100" min="0" title="CA d'achats annuel déclencheur (CHF)" onchange="acUpdateFournisseur('${f.id}','ristourne_seuil',this.value)" style="width:74px;height:28px;box-sizing:border-box;text-align:right;">
+        </div>
+      </td>
+      <td><input type="text" id="four-notes-${f.id}" value="${(f.notes || '').replace(/"/g, '&quot;')}" placeholder="contact, délai, paiement…" onchange="acUpdateFournisseur('${f.id}','notes',this.value)" style="font-size:11px;border:1px solid var(--gray-200);background:var(--white);padding:4px 6px;border-radius:3px;width:100%;min-width:130px;color:var(--gray-600);"></td>
       <td class="num">${st.nb}</td>
-      <td style="text-align:center;"><button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:2px 8px;" title="Supprimer" onclick="acDeleteFournisseur('${f.id}')">✕</button></td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn btn-primary btn-sm" style="padding:3px 8px;" title="Valider et enregistrer" onclick="acValiderFournisseur('${f.id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px;height:13px;stroke-width:2.5;vertical-align:-2px;"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:3px 8px;" title="Supprimer" onclick="acDeleteFournisseur('${f.id}')">✕</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -3092,13 +3105,13 @@ function acRenderFournisseurs() {
       <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <div>
           <div class="card-title">Fournisseurs &amp; conditions</div>
-          <div class="card-hint">Définissez un rabais par défaut (ex. 4% sur Fideco) — appliqué automatiquement aux BL de ce fournisseur.</div>
+          <div class="card-hint">Rabais (ex. 4% sur Fideco) appliqué automatiquement aux BL · ristourne sur volume informative (non déduite des BL). Cliquez sur ✓ pour valider une ligne.</div>
         </div>
         <button class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="acAddFournisseur()">+ Ajouter un fournisseur</button>
       </div>
       <table class="data-table" style="font-size:13px;">
-        <thead><tr><th>Fournisseur</th><th class="num">Rabais par défaut</th><th>Notes / conditions</th><th class="num">Articles</th><th></th></tr></thead>
-        <tbody>${confRows || `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--gray-400);">Aucun fournisseur configuré. Ajoutez-en un, ou configurez-en un depuis la liste détectée ci-dessous.</td></tr>`}</tbody>
+        <thead><tr><th>Fournisseur</th><th class="num">Rabais (BL)</th><th class="num">Ristourne (volume)</th><th>Notes / conditions</th><th class="num">Articles</th><th></th></tr></thead>
+        <tbody>${confRows || `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--gray-400);">Aucun fournisseur configuré. Ajoutez-en un, ou configurez-en un depuis la liste détectée ci-dessous.</td></tr>`}</tbody>
       </table>
     </div>
     ${unconfigured.length ? `
@@ -3459,6 +3472,16 @@ function acFindFournisseur(nom) {
   return acGetConfiguredFournisseurs().find(f => String(f.nom || '').trim().toLowerCase() === n) || null;
 }
 
+/** Clé de normalisation pour le dédoublonnage des fournisseurs.
+ *  Minuscules, sans accents ni ponctuation, suffixes de raison sociale retirés
+ *  → « Bolay SA », « Bolay Sàrl » et « bolay » donnent tous la même clé. */
+function fourNormKey(nom) {
+  let s = String(nom || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  s = s.replace(/[^a-z0-9\s]/g, ' ');                               // ponctuation → espace
+  s = s.replace(/\b(sa|sarl|ag|gmbh|sagl|cie|co|ltd|inc|llc|sas|sasu|eurl)\b/g, ' '); // raisons sociales
+  return s.replace(/\s+/g, ' ').trim();
+}
+
 /** Union des noms de fournisseurs : configurés + vus dans articles + vus dans BL */
 function acGetKnownFournisseurNames() {
   const map = new Map(); // clé minuscule -> libellé affiché
@@ -3486,7 +3509,9 @@ function acAddFournisseur(nom) {
   pharFournisseurs.push({
     id: 'four_' + Math.random().toString(36).slice(2, 9),
     nom: name || 'Nouveau fournisseur',
-    rabais_type: 'pct', rabais_val: 0, notes: ''
+    rabais_type: 'pct', rabais_val: 0,
+    ristourne_pct: 0, ristourne_seuil: 0,
+    notes: ''
   });
   if (typeof saveStores === 'function') saveStores();
   acRenderFournisseurs();
@@ -3497,10 +3522,36 @@ function acUpdateFournisseur(id, field, value) {
   if (!f) return;
   if (field === 'rabais_val') f.rabais_val = parseFloat(value) || 0;
   else if (field === 'rabais_type') f.rabais_type = value === 'chf' ? 'chf' : 'pct';
+  else if (field === 'ristourne_pct') f.ristourne_pct = parseFloat(value) || 0;
+  else if (field === 'ristourne_seuil') f.ristourne_seuil = parseFloat(value) || 0;
   else f[field] = value; // nom / notes
   if (typeof saveStores === 'function') saveStores();
-  // Re-render uniquement pour les champs de rabais (sinon on perd le focus de saisie texte)
-  if (field === 'rabais_val' || field === 'rabais_type') acRenderFournisseurs();
+  // Pas de re-render ici : la ligne se valide via l'icône Valider (évite la perte de focus).
+}
+
+/** Validation explicite d'une ligne fournisseur : relit la ligne, enregistre, confirme. */
+function acValiderFournisseur(id) {
+  const f = acGetConfiguredFournisseurs().find(x => x.id === id);
+  if (!f) return;
+  const g = sfx => document.getElementById('four-' + sfx + '-' + id);
+  const nomEl = g('nom');
+  if (nomEl) {
+    const v = nomEl.value.trim();
+    if (!v) {
+      if (typeof showToast === 'function') showToast('Le nom du fournisseur ne peut pas être vide.', 'error');
+      nomEl.focus();
+      return;
+    }
+    f.nom = v;
+  }
+  if (g('rabval'))    f.rabais_val      = parseFloat(g('rabval').value) || 0;
+  if (g('rabtype'))   f.rabais_type     = g('rabtype').value === 'chf' ? 'chf' : 'pct';
+  if (g('ristpct'))   f.ristourne_pct   = parseFloat(g('ristpct').value) || 0;
+  if (g('ristseuil')) f.ristourne_seuil = parseFloat(g('ristseuil').value) || 0;
+  if (g('notes'))     f.notes           = g('notes').value;
+  if (typeof saveStores === 'function') saveStores();
+  acRenderFournisseurs();
+  if (typeof showToast === 'function') showToast(`✓ « ${f.nom} » enregistré`, 'success');
 }
 
 function acDeleteFournisseur(id) {

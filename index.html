@@ -3676,6 +3676,14 @@ function loadStores() {
   stores.bev.forEach(ensureCostFields);
   if (!Array.isArray(bls)) bls = [];
   if (!Array.isArray(fournisseurs)) fournisseurs = [];
+  // Migration douce : garantir les champs de conditions (rabais immédiat + ristourne sur volume)
+  fournisseurs.forEach(f => {
+    f.rabais_type    = (f.rabais_type === 'chf') ? 'chf' : 'pct';
+    if (f.rabais_val     == null) f.rabais_val     = 0;
+    if (f.ristourne_pct  == null) f.ristourne_pct  = 0;   // ristourne différée sur volume (informative)
+    if (f.ristourne_seuil == null) f.ristourne_seuil = 0; // CA annuel déclencheur (CHF)
+    if (f.notes          == null) f.notes          = '';
+  });
   return { stores, movements, bls, fournisseurs };
 }
 

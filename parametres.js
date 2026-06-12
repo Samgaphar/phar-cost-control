@@ -1562,6 +1562,60 @@ document.addEventListener('DOMContentLoaded', () => {
 // Global state for supplier management
 let _fourList = [];
 let _fourMergeSrc = null;
+let _fourDupGroups = [];   // groupes de doublons probables détectés
+
+/** Regroupe les noms par clé normalisée ; ne garde que les groupes de 2+ (doublons probables). */
+function _fourComputeDupGroups(names) {
+  const keyOf = (typeof fourNormKey === 'function')
+    ? fourNormKey
+    : (s => String(s || '').toLowerCase().trim());
+  const map = new Map();
+  names.forEach(n => {
+    const k = keyOf(n);
+    if (!k) return;
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(n);
+  });
+  return [...map.values()].filter(g => g.length > 1);
+}
+
+/** Nom canonique d'un groupe : priorité au fournisseur déjà configuré, sinon le nom le plus complet. */
+function _fourCanonical(group) {
+  if (typeof acFindFournisseur === 'function') {
+    const configured = group.find(n => acFindFournisseur(n));
+    if (configured) return configured;
+  }
+  return group.slice().sort((a, b) => b.length - a.length)[0];
+}
+
+function _fourMergeGroup(gi) {
+  const group = _fourDupGroups[gi];
+  if (!group) return;
+  const canon  = _fourCanonical(group);
+  const others = group.filter(n => n !== canon);
+  if (!others.length) return;
+  if (!confirm(`Fusionner ${others.length} doublon(s) dans « ${canon} » ?\n\n${others.join('\n')}\n\nCette action est irréversible.`)) return;
+  const renames = {};
+  others.forEach(n => { renames[n] = canon; });
+  _fourApplyRenames(renames);
+  if (typeof showToast === 'function') showToast(`✓ ${others.length} doublon(s) fusionné(s) dans « ${canon} »`, 'success');
+  _renderFournisseursList();
+}
+
+function _fourMergeAllDups() {
+  if (!_fourDupGroups.length) return;
+  const renames = {};
+  let total = 0;
+  _fourDupGroups.forEach(group => {
+    const canon = _fourCanonical(group);
+    group.filter(n => n !== canon).forEach(n => { renames[n] = canon; total++; });
+  });
+  if (!total) return;
+  if (!confirm(`Fusionner automatiquement ${total} doublon(s) détecté(s) ?\n\nChaque groupe est regroupé sous son nom le plus complet (ou le fournisseur déjà configuré).\nCette action est irréversible.`)) return;
+  _fourApplyRenames(renames);
+  if (typeof showToast === 'function') showToast(`✓ ${total} doublon(s) fusionné(s)`, 'success');
+  _renderFournisseursList();
+}
 
 function _fourGetStores() {
   return {
@@ -1581,6 +1635,10 @@ function _fourGetAll() {
     const fc = JSON.parse(localStorage.getItem('phar_fc_articles_v1') || '[]');
     fc.forEach(a => { if (a.fournisseur) names.add(a.fournisseur); });
   } catch(e) {}
+  // Base persistante des fournisseurs configurés (source unique unifiée)
+  if (typeof pharFournisseurs !== 'undefined' && Array.isArray(pharFournisseurs)) {
+    pharFournisseurs.forEach(f => { const d = (f.nom || '').trim(); if (d) names.add(d); });
+  }
   return [...names].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
 }
 
@@ -1641,6 +1699,40 @@ function _fourApplyRenames(renames) {
     });
     if (changed) localStorage.setItem('phar_fc_articles_v1', JSON.stringify(fc));
   } catch(e) {}
+
+  // BL scannés (entête + lignes)
+  if (typeof pharBLs !== 'undefined' && Array.isArray(pharBLs)) {
+    pharBLs.forEach(bl => {
+      if (bl.fournisseur != null && Object.prototype.hasOwnProperty.call(renames, bl.fournisseur))
+        bl.fournisseur = renames[bl.fournisseur];
+      (bl.articles || []).forEach(l => {
+        if (l.fournisseur_ligne != null && Object.prototype.hasOwnProperty.call(renames, l.fournisseur_ligne))
+          l.fournisseur_ligne = renames[l.fournisseur_ligne];
+      });
+    });
+  }
+
+  // Base persistante des fournisseurs configurés : renommer / fusionner / supprimer les conditions
+  if (typeof pharFournisseurs !== 'undefined' && Array.isArray(pharFournisseurs)) {
+    Object.keys(renames).forEach(oldName => {
+      const newName = renames[oldName];
+      const srcIdx = pharFournisseurs.findIndex(f => (f.nom || '').trim() === oldName);
+      if (srcIdx < 0) return;
+      if (!newName) { pharFournisseurs.splice(srcIdx, 1); return; }   // suppression
+      const src = pharFournisseurs[srcIdx];
+      const tgt = pharFournisseurs.find(f => f !== src && (f.nom || '').trim().toLowerCase() === newName.trim().toLowerCase());
+      if (tgt) {
+        // Fusion : on garde les conditions de la cible, on complète seulement si elles sont vides
+        if (!(parseFloat(tgt.rabais_val) || 0)    && (parseFloat(src.rabais_val) || 0))    { tgt.rabais_val = src.rabais_val; tgt.rabais_type = src.rabais_type; }
+        if (!(parseFloat(tgt.ristourne_pct) || 0) && (parseFloat(src.ristourne_pct) || 0)) { tgt.ristourne_pct = src.ristourne_pct; tgt.ristourne_seuil = src.ristourne_seuil; }
+        if (!tgt.notes && src.notes) tgt.notes = src.notes;
+        pharFournisseurs.splice(srcIdx, 1);
+      } else {
+        src.nom = newName;   // simple renommage
+      }
+    });
+  }
+  if (typeof saveStores === 'function') saveStores();
 }
 
 function openFournisseursModal() {
@@ -1661,10 +1753,33 @@ function _renderFournisseursList() {
     return;
   }
 
+  _fourDupGroups = _fourComputeDupGroups(_fourList);
+
   const mergeBanner = _fourMergeSrc
     ? `<div style="background:#FFF3CD;border:1px solid #FFD86B;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:10px;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#856404" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span>Fusion en cours : <strong style="color:#856404;">${_escH(_fourMergeSrc)}</strong> — cliquez sur <strong>Fusionner</strong> du fournisseur cible, ou <button onclick="_fourCancelMerge()" style="background:none;border:none;cursor:pointer;color:#856404;text-decoration:underline;font-size:13px;padding:0;">annuler</button></span>
+      </div>`
+    : '';
+
+  // Bannière de dédoublonnage automatique (masquée pendant une fusion manuelle)
+  const dupBanner = (!_fourMergeSrc && _fourDupGroups.length)
+    ? `<div style="background:#FFF3CD;border:1px solid #FFD86B;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#856404;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#856404" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            ${_fourDupGroups.length} doublon(s) probable(s) détecté(s)
+          </div>
+          <button class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="_fourMergeAllDups()">Tout fusionner</button>
+        </div>
+        ${_fourDupGroups.map((g, gi) => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #FFE9A8;">
+            <div style="font-size:12.5px;color:#5c4a00;line-height:1.5;">
+              ${g.map(n => _escH(n)).join(' <span style="opacity:.45;">=</span> ')}
+              <span style="opacity:.7;">→ <strong>${_escH(_fourCanonical(g))}</strong></span>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="white-space:nowrap;border-color:#D9A800;color:#856404;font-weight:700;" onclick="_fourMergeGroup(${gi})">Fusionner</button>
+          </div>`).join('')}
       </div>`
     : '';
 
@@ -1710,6 +1825,7 @@ function _renderFournisseursList() {
   el.innerHTML = `
     <div style="font-size:13px;color:var(--gray-500,#7E7E79);margin-bottom:12px;">${_fourList.length} fournisseur${_fourList.length !== 1 ? 's' : ''} référencé${_fourList.length !== 1 ? 's' : ''}</div>
     ${mergeBanner}
+    ${dupBanner}
     <div class="card" style="padding:0;overflow:hidden;">
       <table style="width:100%;border-collapse:collapse;">
         <thead>
