@@ -1990,18 +1990,14 @@
 </head>
 <body>
 
-<!-- ===== API KEY BAR ===== -->
+<!-- ===== PROXY STATUS BAR ===== -->
 <div class="api-bar" id="api-bar">
   <span class="api-bar-label">PHAR API</span>
-  <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off">
   <div class="api-bar-status">
     <span class="dot"></span>
-    <span id="api-bar-status-text">Non connecté · saisissez votre clé pour activer le scan IA</span>
+    <span id="api-bar-status-text">Vérification de la connexion au scan IA…</span>
   </div>
-  <span class="api-bar-help">
-    Aucune clé ? <a href="https://console.anthropic.com/" target="_blank">Obtenez-en une</a>
-  </span>
-  <button class="btn btn-ghost btn-sm" onclick="testApiKey()" id="api-test-btn" style="white-space: nowrap;">Tester</button>
+  <button class="btn btn-ghost btn-sm" onclick="checkProxyConnection()" id="api-test-btn" style="white-space: nowrap;">Retester</button>
 </div>
 
 <div class="app">
@@ -2040,13 +2036,8 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
         <span class="notif-dot"></span>
       </button>
-      <div class="user-chip">
-        <div class="user-info">
-          <div class="user-name">M. Roduit</div>
-          <div class="user-role">Chef de cuisine</div>
-        </div>
-        <div class="user-avatar">MR</div>
-      </div>
+      <!-- Slot utilisateur — rempli par parametres.js (renderUserChip) -->
+      <div id="header-user-slot"></div>
     </div>
   </header>
 
@@ -2816,7 +2807,7 @@
           <div class="kpi-corner"></div>
           <div class="kpi-label">Coût matière leaders</div>
           <div class="kpi-value" id="fc-kpi-cout">— <small>CHF</small></div>
-          <div class="kpi-foot">Consommation valorisée au prix cible</div>
+          <div class="kpi-foot">Consommation valorisée au prix réellement payé</div>
         </div>
         <div class="kpi" id="fc-kpi-ratio-card">
           <div class="kpi-corner"></div>
@@ -2885,7 +2876,7 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title">Top articles par impact coût</div>
-            <div class="card-hint">Tri décroissant · consommation × prix cible</div>
+            <div class="card-hint">Tri décroissant · consommation × prix réellement payé</div>
           </div>
           <table class="data-table" style="font-size:13px;">
             <thead>
@@ -3016,7 +3007,7 @@
               </div>
               <div>
                 <label class="field-label">Responsable</label>
-                <input type="text" value="M. Roduit" style="width: 160px;">
+                <input type="text" id="inv-responsable" placeholder="Nom du responsable" style="width: 160px;">
               </div>
             </div>
             <div class="segment">
@@ -3388,7 +3379,7 @@ document.addEventListener('DOMContentLoaded', () => {
     td{padding:6px 10px;border-bottom:1px solid #F4F3F3;}@media print{@page{margin:12mm;}}</style>
     </head><body><h1>Catalogue articles — PHAR Cost</h1>
     <table><thead><tr><th>Article</th><th>Groupe</th><th>Fournisseur</th><th>Unité</th><th style="text-align:right">P.U.</th></tr></thead>
-    <tbody>${items.map(i=>`<tr><td>${i.article}</td><td>${i.groupe||i.categorie||''}</td><td>${i.fournisseur||''}</td><td>${i.unite||''}</td><td style="text-align:right;">${(i.pu||0).toFixed(2)} CHF</td></tr>`).join('')}</tbody></table>
+    <tbody>${items.map(i=>`<tr><td>${_escH(i.article)}</td><td>${_escH(i.groupe||i.categorie||'')}</td><td>${_escH(i.fournisseur||'')}</td><td>${_escH(i.unite||'')}</td><td style="text-align:right;">${(i.pu||0).toFixed(2)} CHF</td></tr>`).join('')}</tbody></table>
     <script>window.onload=()=>window.print();<\/script></body></html>`);
     win.document.close();
   });
@@ -3589,7 +3580,7 @@ function exportRecipePDF() {
     <tr style="font-weight:800; background:#F2F4FA;"><td colspan="4" style="text-align:right;">Total</td><td class="num">${totalCost.toFixed(2)} CHF</td></tr>
     </tbody>
   </table>
-  <div class="footer">PHAR Cost v1.0 · Hôtel Bellerive · Vevey · Ratio cible : ${targetRatio}%</div>
+  <div class="footer">PHAR Cost v1.0 · ${(typeof getActiveClient === 'function' ? (getActiveClient()?.enseigne || getActiveClient()?.nom) : null) || 'Établissement'} · Ratio cible : ${targetRatio}%</div>
   <script>window.onload=()=>{ window.print(); }<\/script>
   </body></html>`);
   win.document.close();
@@ -4120,13 +4111,16 @@ function exportInventoryPDF() {
   const totalValue = filtered.reduce((s, i) => s + computeItemTotal(i) * i.pu, 0);
   const mercLabel = currentMercuriale === 'food' ? 'Food' : 'Boissons';
   const dateStr = new Date().toLocaleDateString('fr-CH');
+  const responsable = document.getElementById('inv-responsable')?.value.trim()
+    || (typeof getCurrentUser === 'function' ? `${getCurrentUser()?.prenom || ''} ${getCurrentUser()?.nom || ''}`.trim() : '')
+    || '—';
 
   const rowsHtml = filtered.map(item => {
     const total = computeItemTotal(item);
     const value = total * item.pu;
     const posVals = posList.map(p => `<td class="num">${item.pos[p] || 0}</td>`).join('');
     const m1 = showM1 ? `<td class="num">${(item.mois_m1||0).toFixed(2)}</td><td class="num">${(total-(item.mois_m1||0)).toFixed(1)}</td>` : '';
-    return `<tr><td>${item.article}</td><td>${item.unite||''}</td><td>${item.fournisseur||''}</td><td class="num">${item.pu.toFixed(2)}</td>${posVals}<td class="num"><strong>${total.toFixed(2)}</strong></td><td class="num"><strong>${value.toFixed(2)}</strong></td>${m1}</tr>`;
+    return `<tr><td>${_escH(item.article)}</td><td>${_escH(item.unite||'')}</td><td>${_escH(item.fournisseur||'')}</td><td class="num">${item.pu.toFixed(2)}</td>${posVals}<td class="num"><strong>${total.toFixed(2)}</strong></td><td class="num"><strong>${value.toFixed(2)}</strong></td>${m1}</tr>`;
   }).join('');
   const posHeaders = posList.map(p => `<th>${p}</th>`).join('');
   const m1Headers = showM1 ? '<th>M-1</th><th>Δ</th>' : '';
@@ -4146,7 +4140,7 @@ function exportInventoryPDF() {
     .footer { margin-top: 20px; font-size: 9px; color: #9A9A95; border-top: 1px solid #E8E8E8; padding-top: 6px; display: flex; justify-content: space-between; }
     @media print { body { margin: 12px; } @page { size: A4 landscape; margin: 12mm; } }
   </style></head><body>
-  <h1>Inventaire ${mercLabel} · Hôtel Bellerive</h1>
+  <h1>Inventaire ${mercLabel} · ${(typeof getActiveClient === 'function' ? (getActiveClient()?.enseigne || getActiveClient()?.nom) : null) || 'Établissement'}</h1>
   <div class="meta">Imprimé le ${dateStr} · ${filtered.length} articles · Valeur totale : ${totalValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,"'")} CHF</div>
   <table>
     <thead><tr><th>Article</th><th>Unité</th><th>Fournisseur</th><th>P.U.</th>${posHeaders}<th>Total</th><th>Valeur CHF</th>${m1Headers}</tr></thead>
@@ -4154,7 +4148,7 @@ function exportInventoryPDF() {
     <tr class="total-row"><td colspan="${4 + posList.length}">TOTAL VALORISATION</td><td class="num">${totalValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,"'")}</td>${showM1?'<td></td><td></td>':''}</tr>
     </tbody>
   </table>
-  <div class="footer"><span>PHAR Cost v1.0 · © PHAR SA 2026</span><span>Responsable : M. Roduit · Signature : _______________________</span></div>
+  <div class="footer"><span>PHAR Cost v1.0 · © PHAR SA 2026</span><span>Responsable : ${responsable} · Signature : _______________________</span></div>
   <script>window.onload=()=>{ window.print(); }<\/script>
   </body></html>`);
   win.document.close();
@@ -4172,74 +4166,55 @@ function validateInventory() {
 switchMercuriale('food');
 
 /* ============================================================
-   API KEY MANAGEMENT
+   PROXY PHAR — connexion au scan IA (Cloudflare Worker)
+
+   L'app ne détient plus aucune clé Anthropic. Le scan IA passe par un
+   proxy serveur (voir module Cost PHAR/backend-proxy) qui garde la
+   vraie clé côté serveur. Renseigner PHAR_PROXY_URL une fois le proxy
+   déployé (voir backend-proxy/README.md) ; tant qu'elle n'est pas
+   renseignée, le scan IA reste indisponible (pas de repli silencieux
+   vers un appel direct à Anthropic).
    ============================================================ */
-let claudeApiKey = '';
+const PHAR_PROXY_URL = 'https://phar-cost-proxy.samuel-grillet-aubert.workers.dev';
+let proxyReady = false;
 
 const apiBar = document.getElementById('api-bar');
-const apiKeyInput = document.getElementById('api-key-input');
 const apiBarStatus = document.getElementById('api-bar-status-text');
 
-// Restore from sessionStorage if available
-try {
-  const saved = sessionStorage.getItem('phar_api_key');
-  if (saved) {
-    apiKeyInput.value = saved;
-    claudeApiKey = saved;
-    apiBar.classList.add('connected');
-    apiBarStatus.textContent = 'Clé enregistrée pour la session · prête à utiliser';
-  }
-} catch(e) {}
-
-apiKeyInput.addEventListener('input', (e) => {
-  claudeApiKey = e.target.value.trim();
-  apiBar.classList.remove('connected', 'error');
-  apiBarStatus.textContent = 'Saisissez votre clé puis cliquez sur Tester';
-});
-
-async function testApiKey() {
-  if (!claudeApiKey) {
-    apiBar.classList.add('error');
-    apiBarStatus.textContent = 'Saisissez d\'abord votre clé API';
-    return;
-  }
+async function checkProxyConnection() {
   const btn = document.getElementById('api-test-btn');
   btn.disabled = true;
-  btn.textContent = 'Test...';
   apiBar.classList.remove('connected', 'error');
-  apiBarStatus.textContent = 'Test de connexion en cours...';
+  apiBarStatus.textContent = 'Vérification de la connexion au scan IA…';
+
+  if (!PHAR_PROXY_URL) {
+    proxyReady = false;
+    apiBar.classList.add('error');
+    apiBarStatus.textContent = '✗ Scan IA indisponible : proxy PHAR non configuré (voir backend-proxy/README.md)';
+    btn.disabled = false;
+    return;
+  }
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeApiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 20,
-        messages: [{ role: 'user', content: 'Respond with exactly: OK' }]
-      })
-    });
+    const response = await fetch(PHAR_PROXY_URL.replace(/\/$/, '') + '/health');
     if (response.ok) {
+      proxyReady = true;
       apiBar.classList.add('connected');
-      apiBarStatus.textContent = '✓ Clé valide · scan IA et analyse disponibles';
-      try { sessionStorage.setItem('phar_api_key', claudeApiKey); } catch(e) {}
+      apiBarStatus.textContent = '✓ Scan IA disponible';
     } else {
-      const err = await response.json();
+      proxyReady = false;
       apiBar.classList.add('error');
-      apiBarStatus.textContent = '✗ ' + (err.error?.message || 'Clé invalide');
+      apiBarStatus.textContent = '✗ Proxy PHAR injoignable (' + response.status + ')';
     }
   } catch (err) {
+    proxyReady = false;
     apiBar.classList.add('error');
     apiBarStatus.textContent = '✗ Erreur réseau : ' + err.message;
   }
   btn.disabled = false;
-  btn.textContent = 'Tester';
 }
+
+checkProxyConnection();
 
 /* ============================================================
    MODULE ACHATS — Scan BL via PHAR API
@@ -4391,15 +4366,13 @@ async function scanSingleDocument(file) {
     { type: 'text', text: 'Analyse ce document et extrais toutes les données structurées au format JSON demandé.' }
   ];
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  if (!PHAR_PROXY_URL) throw new Error('Proxy PHAR non configuré — voir backend-proxy/README.md');
+
+  const response = await fetch(PHAR_PROXY_URL.replace(/\/$/, '') + '/v1/messages', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': claudeApiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      client_id: (typeof getActiveClient === 'function' ? getActiveClient()?.id : null) || 'unknown',
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 4000,
       system: BL_SYSTEM_PROMPT,
@@ -4456,8 +4429,8 @@ function persistScannedBL(parsed, fichier) {
 
 // Scan multi-fichiers : un appel API séquentiel par document
 async function scanBL() {
-  if (!claudeApiKey) {
-    alert('Veuillez d\'abord saisir et tester votre clé PHAR API en haut de la page.');
+  if (!proxyReady) {
+    alert('Scan IA indisponible pour le moment (proxy PHAR non connecté) — voir la barre en haut de page.');
     return;
   }
   if (!blFilesSelected.length) return;
@@ -4531,13 +4504,13 @@ function renderScanResultCard(bl) {
           <tbody>
             ${bl.articles.map(a => `
               <tr>
-                <td style="font-size: 11px; color: var(--gray-500);">${a.ref || '—'}</td>
-                <td><strong>${a.designation || '—'}</strong></td>
+                <td style="font-size: 11px; color: var(--gray-500);">${_escH(a.ref || '—')}</td>
+                <td><strong>${_escH(a.designation || '—')}</strong></td>
                 <td class="num">${(a.quantite || 0).toString().replace('.', ',')}</td>
-                <td>${a.unite || '—'}</td>
+                <td>${_escH(a.unite || '—')}</td>
                 <td class="num">${(a.prix_unitaire_ht || 0).toFixed(2)}</td>
                 <td class="num">${(a.total_ht || 0).toFixed(2)}</td>
-                <td><span class="badge badge-info">${a.categorie_suggeree || 'Autres'}</span></td>
+                <td><span class="badge badge-info">${_escH(a.categorie_suggeree || 'Autres')}</span></td>
               </tr>
             `).join('')}
           </tbody>
@@ -4551,22 +4524,22 @@ function renderScanResultCard(bl) {
   card.style.marginBottom = '16px';
   card.innerHTML = `
     <div class="scan-result-header">
-      <h3>✓ ${bl.type_document === 'facture' ? 'Facture' : bl.type_document === 'bulletin_retour' ? '↩ Bulletin de retour' : 'Bon de livraison'}${bl.fichier ? ' · ' + bl.fichier : ''}
+      <h3>✓ ${bl.type_document === 'facture' ? 'Facture' : bl.type_document === 'bulletin_retour' ? '↩ Bulletin de retour' : 'Bon de livraison'}${bl.fichier ? ' · ' + _escH(bl.fichier) : ''}
         ${bl.type_document === 'bulletin_retour' ? '<span style="margin-left:8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:3px;background:var(--danger-light);color:var(--danger);">RETOUR</span>' : ''}
       </h3>
-      <button class="btn ${bl.type_document === 'bulletin_retour' ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="openBLIntegrationModalFromBL('${bl.id}')" style="${bl.type_document === 'bulletin_retour' ? 'border-color:var(--danger);color:var(--danger);' : ''}">
+      <button class="btn ${bl.type_document === 'bulletin_retour' ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="openBLIntegrationModalFromBL('${_escA(bl.id)}')" style="${bl.type_document === 'bulletin_retour' ? 'border-color:var(--danger);color:var(--danger);' : ''}">
         ${bl.type_document === 'bulletin_retour' ? '↩ Appliquer le retour' : 'Intégrer à l\'inventaire'}
       </button>
     </div>
     <div class="scan-meta-grid">
-      <div class="scan-meta-item"><div class="label">Fournisseur</div><div class="value">${bl.fournisseur || '—'}</div></div>
-      <div class="scan-meta-item"><div class="label">N° document</div><div class="value">${bl.numero || '—'}</div></div>
-      ${bl.bl_reference ? `<div class="scan-meta-item"><div class="label">Réf. BL origine</div><div class="value" style="color:var(--danger);font-weight:600;">${bl.bl_reference}</div></div>` : ''}
-      <div class="scan-meta-item"><div class="label">Date</div><div class="value">${bl.date || '—'}</div></div>
+      <div class="scan-meta-item"><div class="label">Fournisseur</div><div class="value">${_escH(bl.fournisseur || '—')}</div></div>
+      <div class="scan-meta-item"><div class="label">N° document</div><div class="value">${_escH(bl.numero || '—')}</div></div>
+      ${bl.bl_reference ? `<div class="scan-meta-item"><div class="label">Réf. BL origine</div><div class="value" style="color:var(--danger);font-weight:600;">${_escH(bl.bl_reference)}</div></div>` : ''}
+      <div class="scan-meta-item"><div class="label">Date</div><div class="value">${_escH(bl.date || '—')}</div></div>
       <div class="scan-meta-item"><div class="label">${bl.type_document === 'bulletin_retour' ? 'Crédit TTC' : 'Total TTC'}</div><div class="value" style="color:${bl.type_document === 'bulletin_retour' ? 'var(--danger)' : 'var(--phar-navy)'};">${bl.type_document === 'bulletin_retour' ? '−' : ''}${totalTTC.toFixed(2)} CHF</div></div>
     </div>
     ${articlesHtml}
-    ${bl.notes ? `<div style="padding: 12px 20px; background: var(--gray-50); border-top: 1px solid var(--gray-200); font-size: 12px; color: var(--gray-700);"><strong>Notes :</strong> ${bl.notes}</div>` : ''}
+    ${bl.notes ? `<div style="padding: 12px 20px; background: var(--gray-50); border-top: 1px solid var(--gray-200); font-size: 12px; color: var(--gray-700);"><strong>Notes :</strong> ${_escH(bl.notes)}</div>` : ''}
   `;
   document.getElementById('bl-scan-results').appendChild(card);
 }
@@ -5112,12 +5085,12 @@ function renderAchatsRecap() {
       : '';
     return `
       <tr>
-        <td style="padding:10px 14px;font-size:12px;color:var(--gray-500);">${bl.date || '—'}</td>
+        <td style="padding:10px 14px;font-size:12px;color:var(--gray-500);">${_escH(bl.date || '—')}</td>
         <td style="padding:10px 8px;font-weight:600;font-size:13px;">
-          ${bl.fournisseur || '—'}
+          ${_escH(bl.fournisseur || '—')}
           <div style="display:flex;gap:4px;margin-top:3px;">${typeTag}${sourceBadge}</div>
         </td>
-        <td style="padding:10px 8px;font-size:12px;color:var(--gray-500);">${bl.numero || '—'}</td>
+        <td style="padding:10px 8px;font-size:12px;color:var(--gray-500);">${_escH(bl.numero || '—')}</td>
         <td style="padding:10px 8px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;">${fmt(bl.total_ht || 0)}</td>
         <td style="padding:10px 8px;text-align:right;font-variant-numeric:tabular-nums;color:var(--gray-500);">${fmt(bl.total_ttc || 0)}</td>
         <td style="padding:10px 14px;">${facLink}</td>
@@ -5320,9 +5293,9 @@ function renderBLRepository() {
           const st = BL_STATUT_LABELS[bl.statut] || BL_STATUT_LABELS.a_rapprocher;
           return `<tr>
             <td class="bl-check-col"><input type="checkbox" class="bl-check" ${_blSelection.has(bl.id) ? 'checked' : ''} onchange="toggleBLSelect('${bl.id}', this.checked)"></td>
-            <td>${bl.date || '—'}</td>
+            <td>${_escH(bl.date || '—')}</td>
             <td>
-              <strong>${bl.fournisseur || '—'}</strong>
+              <strong>${_escH(bl.fournisseur || '—')}</strong>
               ${bl.type_document === 'bulletin_retour'
                 ? `<span style="margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.06em;
                      color:var(--danger);background:var(--danger-light);
@@ -5339,7 +5312,7 @@ function renderBLRepository() {
                      border:1px solid var(--gray-300);padding:1px 5px;border-radius:3px;">MANUEL</span>`
                 : ''}
             </td>
-            <td>${bl.numero || '—'}</td>
+            <td>${_escH(bl.numero || '—')}</td>
             <td class="num">${bl.articles ? bl.articles.length : 0}</td>
             <td class="num">${(bl.total_ht || 0).toFixed(2)}</td>
             <td class="num">${(bl.total_ttc || 0).toFixed(2)}</td>
@@ -5629,10 +5602,16 @@ function saveManualBL() {
 
 function resetLocalData() {
   if (!confirm('Réinitialiser TOUTES les données locales ?\n\nLes mercuriales reviendront aux données MONA d\'origine et le journal des entrées sera effacé. Action irréversible.')) return;
+  // Toutes les clés de données applicatives phar_* — hors phar_clients_v1 / phar_active_client_id_v1
+  // (identité SaaS du client, ne doit pas être effacée par un reset de données locales).
+  const keysToReset = [
+    LS_KEYS.stores, LS_KEYS.movements, LS_KEYS.bls, LS_KEYS.fournisseurs,
+    'phar_stores_food', 'phar_stores_bev',
+    'phar_fc_articles_v1', 'phar_fc_semaine_v1', 'phar_fc_historique_v1', 'phar_fc_factures_v1',
+    'phar_custom_categories_v1', 'phar_settings_v1', 'phar_users_v1', 'phar_recipes_v1'
+  ];
   try {
-    localStorage.removeItem(LS_KEYS.stores);
-    localStorage.removeItem(LS_KEYS.movements);
-    localStorage.removeItem(LS_KEYS.bls);
+    keysToReset.forEach(k => localStorage.removeItem(k));
   } catch (e) {}
   location.reload();
 }

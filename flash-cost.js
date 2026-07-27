@@ -27,11 +27,11 @@ const FC_CATEGORIES = [
 const FC_CAT_ALCOOL = new Set(['Vins','Champagnes & Mousseux','Spiritueux','Bières']);
 
 // Mots-clés par catégorie (normalisés sans accents)
+// Ordre volontaire : catégories food/non-alcool en premier, catégories alcool en dernier.
+// Raison : des mots-clés alcool comme "vin " apparaissent aussi dans des intitulés food
+// ("sauce au vin blanc", "fond de veau au vin") — en testant food d'abord (ex. "sauce "/"fond "
+// dans Épicerie sèche), ces articles sont classés correctement avant d'atteindre "Vins".
 const FC_CAT_KW = {
-  'Vins':                  ['vin ','vins','wine','rouge','blanc','rose','rosé','chasselas','pinot','merlot','syrah','gamay','chardonnay','sauvignon','riesling','fendant','dole','dôle','viognier','gewurz','cepage','aigle','calamin','chardonne','obrist'],
-  'Champagnes & Mousseux': ['champagne','prosecco','cava','mousseux','petillant','cremant','crémant','spumante','sekt'],
-  'Spiritueux':            ['whisky','whiskey','vodka',' gin ','rhum','rum','cognac','armagnac','liqueur','aperol','campari','amaretto','baileys','cointreau','kirsch','brandy','grappa','marc','porto','eaude vie','eau-de-vie','absinthe','pastis','mezcal','tequila','calvados'],
-  'Bières':                ['biere','bière','beer',' ale ',' ipa ','lager','stout','pils','blanche','craft','ambrée','ambree','hefeweizen','radler','weizen'],
   'Boissons sans alcool':  ['coca','cola','pepsi','fanta','sprite','limonade','jus d','sirop','minerale','mineralé','thé glacé','ice tea','redbull','energy','tonic','soda','bitter','crodino','schweppes','grenadine','capri','elka'],
   'Café & Thé':            ['cafe','café','coffee','nespresso','expresso','espresso','the ','thé ','tea','infusion','tisane','matcha','lungo','ristretto','nescafe'],
   'Viande':                ['boeuf','bœuf','veau','porc','agneau','mouton','volaille','poulet','canard','foie','filet','entrecote','cote de','jambon','bacon','lardons','saucisse','charcuterie','dinde','lapin','gibier','cerf','sanglier','magret','confit','pigeon'],
@@ -41,7 +41,11 @@ const FC_CAT_KW = {
   'Boulangerie & Pâtisserie':['pain','baguette','brioche','croissant','madeleine','gateau','tarte','farine','levure','feuilletage','chocolat','cacao','vanille','praline'],
   'Épicerie sèche':        ['pates','pâtes',' riz ','lentille','haricot','quinoa','semoule','huile','vinaigre',' sel ','poivre','epice','epices','herbe','bouillon','fond ','fonds','sauce ','concasse','cornichon','moutarde','mayonnaise','huile d'],
   'Condiments & Sauces':   ['ketchup','tabasco','worcester','soja','nuoc','pesto','tapenade'],
-  'Nettoyage':             ['detergent','nettoyant','desinfectant','savon','lessive','eponge','torchon']
+  'Nettoyage':             ['detergent','nettoyant','desinfectant','savon','lessive','eponge','torchon'],
+  'Vins':                  ['vin ','vins','wine','rouge','blanc','rose','rosé','chasselas','pinot','merlot','syrah','gamay','chardonnay','sauvignon','riesling','fendant','dole','dôle','viognier','gewurz','cepage','aigle','calamin','chardonne','obrist'],
+  'Champagnes & Mousseux': ['champagne','prosecco','cava','mousseux','petillant','cremant','crémant','spumante','sekt'],
+  'Spiritueux':            ['whisky','whiskey','vodka',' gin ','rhum','rum','cognac','armagnac','liqueur','aperol','campari','amaretto','baileys','cointreau','kirsch','brandy','grappa','marc','porto','eaude vie','eau-de-vie','absinthe','pastis','mezcal','tequila','calvados'],
+  'Bières':                ['biere','bière','beer',' ale ',' ipa ','lager','stout','pils','blanche','craft','ambrée','ambree','hefeweizen','radler','weizen']
 };
 
 /* ─── Catégories personnalisées ──────────────────────────────── */
@@ -130,6 +134,8 @@ function _fcDemoSemaine() {
     ca_ht: 28000,
     stock_ouverture: { fca_1:8.5, fca_2:4.0, fca_3:2.1, fca_4:1.5, fca_5:3.2, fca_6:1.2, fca_7:2.0, fca_8:12, fca_9:36, fca_10:3 },
     achats:          { fca_1:12.0,fca_2:5.0, fca_3:3.5, fca_4:2.0, fca_5:6.0, fca_6:2.0, fca_7:3.0, fca_8:24, fca_9:48, fca_10:6 },
+    // Valeur réellement payée (qté × PU du BL) — démo : identique au prix cible par défaut.
+    achats_valeur:   { fca_1:12.0*34.90, fca_2:5.0*43.10, fca_3:3.5*37.34, fca_4:2.0*38.00, fca_5:6.0*13.75, fca_6:2.0*42.00, fca_7:3.0*14.00, fca_8:24*14.90, fca_9:48*5.43, fca_10:6*18.04 },
     stock_fermeture: {},
     bls: []
   };
@@ -162,6 +168,7 @@ function fcLoad() {
     fcSemaine = rs ? JSON.parse(rs) : _fcDemoSemaine();
     if (!fcSemaine.stock_fermeture) fcSemaine.stock_fermeture = {};
     if (!fcSemaine.achats) fcSemaine.achats = {};
+    if (!fcSemaine.achats_valeur) fcSemaine.achats_valeur = {};
 
     const rh = localStorage.getItem(FC_LS.historique);
     fcHistorique = rh ? JSON.parse(rh) : JSON.parse(JSON.stringify(FC_DEMO_HISTORIQUE));
@@ -191,6 +198,15 @@ function fcFmt(n) {
 function fcFmtPct(n) {
   if (n === null || isNaN(n)) return '—';
   return n.toFixed(1) + '%';
+}
+
+/** Enseigne du client actif, pour les en-têtes d'export PDF. */
+function _fcEnseigne() {
+  if (typeof getActiveClient === 'function') {
+    const c = getActiveClient();
+    return c?.enseigne || c?.nom || 'Établissement';
+  }
+  return 'Établissement';
 }
 
 function fcNorm(s) {
@@ -225,6 +241,8 @@ function fcIntegrateBLAchats(bl) {
     const qte = parseFloat(line.quantite) || 0;
     const pu  = parseFloat(line.prix_unitaire_ht) || 0;
     fcSemaine.achats[id] = (fcSemaine.achats[id] || 0) + qte;
+    if (!fcSemaine.achats_valeur) fcSemaine.achats_valeur = {};
+    fcSemaine.achats_valeur[id] = (fcSemaine.achats_valeur[id] || 0) + qte * pu;
     const seuilMax = article.prix_cible * (1 + article.seuil_alerte / 100);
     if (pu > 0 && pu > seuilMax) {
       alerts.push({
@@ -343,6 +361,7 @@ function fcSaveArticle() {
     if (fcSemaine) {
       if (fcSemaine.stock_ouverture[art.id] === undefined) fcSemaine.stock_ouverture[art.id] = 0;
       if (fcSemaine.achats[art.id] === undefined)          fcSemaine.achats[art.id] = 0;
+      if (fcSemaine.achats_valeur[art.id] === undefined)   fcSemaine.achats_valeur[art.id] = 0;
     }
     fcArticles.push(art);
   }
@@ -512,13 +531,19 @@ function renderFC2BLRapprochement() {
   if (!wrap || !fcSemaine) return;
 
   const totalAchats = fcArticles.reduce((s, a) => {
-    return s + (fcSemaine.achats[a.id] || 0) * a.prix_cible;
+    const qte = fcSemaine.achats[a.id] || 0;
+    const val = (fcSemaine.achats_valeur || {})[a.id];
+    return s + (qte > 0 ? (val !== undefined ? val : qte * a.prix_cible) : 0);
   }, 0);
 
   const rows = fcArticles.map(a => {
     const qte   = fcSemaine.achats[a.id] || 0;
-    const valeur = qte * a.prix_cible;
+    const valeurReelle = (fcSemaine.achats_valeur || {})[a.id];
     const hasQte = qte > 0;
+    // Valeur réelle si connue (BL intégré), sinon estimation au prix cible (saisie manuelle ancienne, etc.)
+    const valeur = hasQte ? (valeurReelle !== undefined ? valeurReelle : qte * a.prix_cible) : 0;
+    const prixMoyen = hasQte ? valeur / qte : 0;
+    const alertePrix = hasQte && prixMoyen > a.prix_cible * (1 + a.seuil_alerte / 100);
     return `<tr>
       <td style="font-weight:600;">${a.nom}</td>
       <td><span class="badge badge-info">${a.famille}</span></td>
@@ -526,8 +551,9 @@ function renderFC2BLRapprochement() {
       <td style="text-align:right;font-variant-numeric:tabular-nums;">
         ${hasQte ? qte.toFixed(2) : '<span style="color:var(--gray-300)">—</span>'} ${a.unite}
       </td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:${hasQte?700:400};">
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:${hasQte?700:400};${alertePrix ? 'color:var(--danger);' : ''}">
         ${hasQte ? fcFmt(valeur) + ' CHF' : '<span style="color:var(--gray-300)">—</span>'}
+        ${alertePrix ? `<div style="font-size:10px;font-weight:700;color:var(--danger);">moy. ${fcFmt(prixMoyen)} vs cible ${fcFmt(a.prix_cible)} CHF</div>` : ''}
       </td>
       <td style="text-align:center;">
         ${hasQte
@@ -547,12 +573,12 @@ function renderFC2BLRapprochement() {
         <table class="data-table" style="font-size:13px;">
           <thead><tr>
             <th>Article leader</th><th>Famille</th><th>Fournisseur</th>
-            <th class="num">Qté achetée</th><th class="num">Valeur estimée</th>
+            <th class="num">Qté achetée</th><th class="num">Valeur réelle (BL)</th>
             <th style="text-align:center;">Statut</th>
           </tr></thead>
           <tbody>${rows}</tbody>
           <tfoot><tr style="background:var(--phar-navy-pale);">
-            <td colspan="4" style="padding:12px 16px;font-weight:700;font-size:13px;color:var(--phar-navy);">Total valorisé (au prix cible)</td>
+            <td colspan="4" style="padding:12px 16px;font-weight:700;font-size:13px;color:var(--phar-navy);">Total réel des achats</td>
             <td style="text-align:right;font-weight:800;font-family:'Archivo';font-size:15px;color:var(--phar-navy);padding:12px 16px;">${fcFmt(totalAchats)} CHF</td>
             <td></td>
           </tr></tfoot>
@@ -712,17 +738,26 @@ function fcCalcSemaine() {
   const details = fcArticles.map(a => {
     const ouv    = parseFloat(fcSemaine.stock_ouverture[a.id]) || 0;
     const achats = parseFloat(fcSemaine.achats[a.id]) || 0;
+    const achatsValeur = parseFloat((fcSemaine.achats_valeur || {})[a.id]) || 0;
     const fermRaw = fcSemaine.stock_fermeture[a.id];
     const ferm   = (fermRaw !== null && fermRaw !== undefined) ? parseFloat(fermRaw) : (ouv + achats);
     const conso  = Math.max(0, ouv + achats - ferm);
-    const cout   = conso * a.prix_cible;
+
+    // Prix réellement payé cette semaine (moyenne pondérée des BL intégrés).
+    // Si aucun achat n'a été enregistré cette semaine (conso puisée sur le stock d'ouverture),
+    // on retombe sur le prix cible faute de coût réel connu pour ce stock.
+    const prixReelMoyen = achats > 0 ? (achatsValeur / achats) : a.prix_cible;
+    const cout   = conso * prixReelMoyen;
     coutTotal   += cout;
+
+    const ecartPct = achats > 0 ? ((prixReelMoyen - a.prix_cible) / a.prix_cible * 100) : 0;
+    const alertePrix = achats > 0 && prixReelMoyen > a.prix_cible * (1 + a.seuil_alerte / 100);
 
     if (!parFamille[a.famille]) parFamille[a.famille] = { cout: 0, nb: 0 };
     parFamille[a.famille].cout += cout;
     parFamille[a.famille].nb++;
 
-    return { ...a, conso, cout, pct_ca: ca > 0 ? (cout / ca * 100) : 0 };
+    return { ...a, conso, cout, prixReelMoyen, ecartPct, alertePrix, pct_ca: ca > 0 ? (cout / ca * 100) : 0 };
   }).sort((a, b) => b.cout - a.cout);
 
   const ratio = ca > 0 ? (coutTotal / ca * 100) : 0;
@@ -790,7 +825,10 @@ function renderFC4() {
           <td style="font-weight:600;">${a.nom}</td>
           <td><span class="badge badge-info">${a.famille}</span></td>
           <td class="num">${a.conso > 0.001 ? a.conso.toFixed(2) + ' ' + a.unite : '<span style="color:var(--gray-300)">—</span>'}</td>
-          <td class="num" style="font-weight:700;">${a.cout > 0 ? fcFmt(a.cout) + ' CHF' : '<span style="color:var(--gray-300)">—</span>'}</td>
+          <td class="num" style="font-weight:700;">
+            ${a.cout > 0 ? fcFmt(a.cout) + ' CHF' : '<span style="color:var(--gray-300)">—</span>'}
+            ${a.alertePrix ? `<div style="font-size:10px;font-weight:700;color:var(--danger);">prix réel ${fcFmt(a.prixReelMoyen)} CHF vs cible ${fcFmt(a.prix_cible)} CHF (+${a.ecartPct.toFixed(1)}%)</div>` : ''}
+          </td>
           <td class="num">
             <span style="font-weight:700;color:${a.pct_ca > 10 ? 'var(--danger)' : a.pct_ca > 5 ? 'var(--warning)' : a.pct_ca > 0 ? 'var(--success)' : 'var(--gray-300)'};">
               ${a.pct_ca > 0 ? fcFmtPct(a.pct_ca) : '—'}
@@ -900,7 +938,7 @@ function fcExportPDF() {
     @media print{@page{size:A4;margin:12mm;}}
   </style></head><body>
   <h1>Flash Cost · ${fcSemaine.debut} – ${fcSemaine.fin}</h1>
-  <div class="meta">Hôtel Bellerive · Vevey · Imprimé le ${date} · ${fcArticles.length} articles leaders</div>
+  <div class="meta">${_fcEnseigne()} · Imprimé le ${date} · ${fcArticles.length} articles leaders</div>
   <div class="kpis">
     <div class="kpi"><div class="kpi-label">CA semaine HT</div><div class="kpi-val">${fcFmt(calc.ca)} CHF</div></div>
     <div class="kpi"><div class="kpi-label">Coût matière leaders</div><div class="kpi-val">${fcFmt(calc.coutTotal)} CHF</div></div>
@@ -962,7 +1000,9 @@ function fcValiderSemaine() {
     ratio:      calc.ratio,
     detail:     calc.details.map(a => ({
       id: a.id, nom: a.nom, famille: a.famille,
-      conso: a.conso, cout: a.cout, pct_ca: a.pct_ca
+      conso: a.conso, cout: a.cout, pct_ca: a.pct_ca,
+      prix_reel_moyen: a.prixReelMoyen, prix_cible: a.prix_cible,
+      ecart_pct: a.ecartPct, alerte_prix: a.alertePrix
     }))
   };
   fcHistorique.unshift(entry);
@@ -984,6 +1024,7 @@ function fcValiderSemaine() {
     ca_ht:           0,
     stock_ouverture: newOuv,
     achats:          Object.fromEntries(fcArticles.map(a => [a.id, 0])),
+    achats_valeur:   Object.fromEntries(fcArticles.map(a => [a.id, 0])),
     stock_fermeture: {},
     bls:             []
   };
@@ -2067,7 +2108,7 @@ function fcExportAnalyticsPDF() {
     @media print{@page{size:A4;margin:10mm;}}
   </style></head><body>
   <h1>Analyse entrées en stock · ${from} → ${to}</h1>
-  <div class="meta">Hôtel Bellerive · Vevey · Imprimé le ${date} · ${rows.length} articles · ${mvs.length} mouvements</div>
+  <div class="meta">${_fcEnseigne()} · Imprimé le ${date} · ${rows.length} articles · ${mvs.length} mouvements</div>
   <table>
     <thead><tr><th>#</th><th>Article</th><th>Fournisseur</th><th class="num">Livraisons</th><th class="num">Valeur CHF</th><th class="num">% total</th></tr></thead>
     <tbody>
@@ -2434,16 +2475,16 @@ function _renderPHARMarketplaceCard(parsed) {
       : '';
 
     return `<tr id="phar-mkt-row-${idx}">
-      <td style="font-size:11px;color:var(--phar-navy);font-weight:700;font-family:monospace;">${a.ref}</td>
+      <td style="font-size:11px;color:var(--phar-navy);font-weight:700;font-family:monospace;">${_escH(a.ref)}</td>
       <td style="font-weight:600;max-width:200px;">
-        ${a.designation}
+        ${_escH(a.designation)}
         ${a.fournisseur_ligne && a.fournisseur_ligne !== 'PHAR Marketplace'
-          ? `<div style="font-size:10px;color:var(--gray-400);margin-top:1px;">via ${a.fournisseur_ligne}</div>`
+          ? `<div style="font-size:10px;color:var(--gray-400);margin-top:1px;">via ${_escH(a.fournisseur_ligne)}</div>`
           : ''}
       </td>
       <td class="num">${a.quantite}</td>
       <td>
-        <div style="font-size:12px;">${a.unite}</div>
+        <div style="font-size:12px;">${_escH(a.unite)}</div>
         ${uniteDetail}
       </td>
       <td class="num" style="font-weight:700;">${a.prix_unitaire_ht.toFixed(2)}</td>
@@ -2473,14 +2514,14 @@ function _renderPHARMarketplaceCard(parsed) {
             <polygon points="27.5,2 82.5,2 110,48 82.5,94 27.5,94 0,48" fill="var(--phar-navy)"/>
             <polygon points="24,76 24,22 72,46" fill="white"/>
           </svg>
-          PHAR Marketplace · Commande ${parsed.numero}
+          PHAR Marketplace · Commande ${_escH(parsed.numero)}
         </h3>
         <div style="font-size:11px;color:var(--gray-500);margin-top:4px;">
-          Livraison : ${parsed.date} · Commandé le : ${parsed.date_commande}
-          ${parsed.reference ? ` · Réf. : ${parsed.reference}` : ''}
+          Livraison : ${_escH(parsed.date)} · Commandé le : ${_escH(parsed.date_commande)}
+          ${parsed.reference ? ` · Réf. : ${_escH(parsed.reference)}` : ''}
         </div>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="openBLIntegrationModalFromBL('${parsed.id || ''}')">
+      <button class="btn btn-primary btn-sm" onclick="openBLIntegrationModalFromBL('${_escA(parsed.id || '')}')">
         Intégrer à l'inventaire
       </button>
     </div>
@@ -2488,8 +2529,8 @@ function _renderPHARMarketplaceCard(parsed) {
     <!-- Méta -->
     <div class="scan-meta-grid">
       <div class="scan-meta-item"><div class="label">Fournisseur</div><div class="value">PHAR Marketplace</div></div>
-      <div class="scan-meta-item"><div class="label">N° commande</div><div class="value" style="font-family:monospace;">${parsed.numero}</div></div>
-      <div class="scan-meta-item"><div class="label">Date livraison</div><div class="value">${parsed.date}</div></div>
+      <div class="scan-meta-item"><div class="label">N° commande</div><div class="value" style="font-family:monospace;">${_escH(parsed.numero)}</div></div>
+      <div class="scan-meta-item"><div class="label">Date livraison</div><div class="value">${_escH(parsed.date)}</div></div>
       <div class="scan-meta-item">
         <div class="label">Total TTC</div>
         <div class="value" style="color:var(--phar-navy);font-family:'Archivo';font-weight:800;">${parsed.total_ttc.toFixed(2)} CHF</div>
@@ -2527,7 +2568,7 @@ function _renderPHARMarketplaceCard(parsed) {
         <polygon points="27.5,2 82.5,2 110,48 82.5,94 27.5,94 0,48" fill="var(--phar-navy)" opacity=".5"/>
         <polygon points="24,76 24,22 72,46" fill="white"/>
       </svg>
-      Import automatique PHAR Marketplace · ${parsed.fichier}
+      Import automatique PHAR Marketplace · ${_escH(parsed.fichier)}
     </div>`;
 
   container.appendChild(card);
@@ -2568,10 +2609,10 @@ window.renderScanResultCard = function(bl) {
         `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`
       ).join('');
       return `<tr id="bl-art-row-${bl.id}-${idx}">
-        <td style="font-size:11px;color:var(--gray-500);">${a.ref || '—'}</td>
-        <td style="font-weight:600;max-width:200px;">${a.designation || '—'}</td>
+        <td style="font-size:11px;color:var(--gray-500);">${_escH(a.ref || '—')}</td>
+        <td style="font-weight:600;max-width:200px;">${_escH(a.designation || '—')}</td>
         <td class="num">${qte.toString().replace('.', ',')}</td>
-        <td>${a.unite || '—'}</td>
+        <td>${_escH(a.unite || '—')}</td>
         <td class="num" style="font-variant-numeric:tabular-nums;">${puHT.toFixed(2)}</td>
         <td class="num" style="font-weight:700;font-variant-numeric:tabular-nums;">${totalHT.toFixed(2)}</td>
         <td style="text-align:center;">
@@ -2626,20 +2667,20 @@ window.renderScanResultCard = function(bl) {
   card.dataset.blId = bl.id;
   card.innerHTML = `
     <div class="scan-result-header">
-      <h3>✓ ${bl.type_document === 'facture' ? 'Facture' : 'Bon de livraison'}${bl.fichier ? ' · ' + bl.fichier : ''}</h3>
-      <button class="btn btn-primary btn-sm" onclick="openBLIntegrationModalFromBL('${bl.id}')">Intégrer à l'inventaire</button>
+      <h3>✓ ${bl.type_document === 'facture' ? 'Facture' : 'Bon de livraison'}${bl.fichier ? ' · ' + _escH(bl.fichier) : ''}</h3>
+      <button class="btn btn-primary btn-sm" onclick="openBLIntegrationModalFromBL('${_escA(bl.id)}')">Intégrer à l'inventaire</button>
     </div>
     <div class="scan-meta-grid">
-      <div class="scan-meta-item"><div class="label">Fournisseur</div><div class="value">${bl.fournisseur || '—'}</div></div>
-      <div class="scan-meta-item"><div class="label">N° document</div><div class="value">${bl.numero || '—'}</div></div>
-      <div class="scan-meta-item"><div class="label">Date</div><div class="value">${bl.date || '—'}</div></div>
+      <div class="scan-meta-item"><div class="label">Fournisseur</div><div class="value">${_escH(bl.fournisseur || '—')}</div></div>
+      <div class="scan-meta-item"><div class="label">N° document</div><div class="value">${_escH(bl.numero || '—')}</div></div>
+      <div class="scan-meta-item"><div class="label">Date</div><div class="value">${_escH(bl.date || '—')}</div></div>
       <div class="scan-meta-item">
         <div class="label">Total TTC</div>
         <div class="value" style="color:var(--phar-navy);">${(totalTTC || 0).toFixed(2)} CHF</div>
       </div>
     </div>
     ${articlesHtml}
-    ${bl.notes ? `<div style="padding:10px 20px;background:var(--gray-50);border-top:1px solid var(--gray-200);font-size:12px;color:var(--gray-700);"><strong>Notes :</strong> ${bl.notes}</div>` : ''}`;
+    ${bl.notes ? `<div style="padding:10px 20px;background:var(--gray-50);border-top:1px solid var(--gray-200);font-size:12px;color:var(--gray-700);"><strong>Notes :</strong> ${_escH(bl.notes)}</div>` : ''}`;
 
   document.getElementById('bl-scan-results').appendChild(card);
 };
@@ -3315,10 +3356,10 @@ function _blCardInnerHTML(bl) {
       || (typeof fcAutoCategory === 'function' ? fcAutoCategory(a.designation || '') : 'Autres');
     const tva = a.tva_pct != null ? a.tva_pct
       : (typeof fcAutoTVA === 'function' ? fcAutoTVA(a.designation || '', cat) : 2.6);
-    const catOpts = cats.map(c => `<option value="${c}" ${c === cat ? 'selected' : ''}>${c}</option>`).join('');
+    const catOpts = cats.map(c => `<option value="${_escA(c)}" ${c === cat ? 'selected' : ''}>${_escH(c)}</option>`).join('');
     const sub = (a.units_per_uv ? `${a.units_per_uv} pcs · ${_n2(a.prix_base_piece)} CHF/pce` : '')
       + (a.fournisseur_ligne && a.fournisseur_ligne !== 'PHAR Marketplace'
-        ? `${a.units_per_uv ? ' · ' : ''}via ${a.fournisseur_ligne}` : '');
+        ? `${a.units_per_uv ? ' · ' : ''}via ${_escH(a.fournisseur_ligne)}` : '');
     const hasRab = (parseFloat(a.rabais_val) || 0) > 0;
     // TVA éditable : taux auto, override manuel confirmé, taux suisses légaux
     const autoTva = (typeof fcAutoTVA === 'function' ? fcAutoTVA(a.designation || '', cat) : 2.6);
@@ -3420,8 +3461,8 @@ function _blCardInnerHTML(bl) {
         </tfoot>
       </table>
     </div>
-    ${bl.notes ? `<div style="padding:8px 16px;background:var(--gray-50);border-top:1px solid var(--gray-200);font-size:11px;color:var(--gray-600);"><strong>Notes :</strong> ${bl.notes}</div>` : ''}
-    <div style="padding:6px 16px;background:var(--gray-50);border-top:1px solid var(--gray-200);font-size:10px;color:var(--gray-400);">Modifications enregistrées automatiquement · ${isMkt ? 'Import PHAR Marketplace' : 'Scan IA'}${bl.fichier ? ' · ' + bl.fichier : ''}</div>
+    ${bl.notes ? `<div style="padding:8px 16px;background:var(--gray-50);border-top:1px solid var(--gray-200);font-size:11px;color:var(--gray-600);"><strong>Notes :</strong> ${_escH(bl.notes)}</div>` : ''}
+    <div style="padding:6px 16px;background:var(--gray-50);border-top:1px solid var(--gray-200);font-size:10px;color:var(--gray-400);">Modifications enregistrées automatiquement · ${isMkt ? 'Import PHAR Marketplace' : 'Scan IA'}${bl.fichier ? ' · ' + _escH(bl.fichier) : ''}</div>
   `;
 }
 
@@ -3576,7 +3617,7 @@ function _blFournisseurOptions(current) {
     const cond = sup && (parseFloat(sup.rabais_val) || 0) > 0
       ? ` (−${sup.rabais_val}${sup.rabais_type === 'chf' ? ' CHF' : '%'})` : '';
     const sel = cur && n.toLowerCase() === cur.toLowerCase() ? 'selected' : '';
-    return `<option value="${n.replace(/"/g, '&quot;')}" ${sel}>${n}${cond}</option>`;
+    return `<option value="${_escA(n)}" ${sel}>${_escH(n)}${_escH(cond)}</option>`;
   }).join('');
   opts += `<option value="__new__">+ Autre fournisseur…</option>`;
   return opts;

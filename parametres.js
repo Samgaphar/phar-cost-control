@@ -76,6 +76,27 @@ function getCurrentUser() {
   return pharUsers.find(u => u.id === _activeUserId) || pharUsers[0];
 }
 
+/**
+ * Rend le chip utilisateur dans #header-user-slot (avatar, nom, rôle).
+ * Appelé au chargement, puis après chaque sauvegarde de "Mon compte".
+ */
+function renderUserChip() {
+  const slot = document.getElementById('header-user-slot');
+  if (!slot) return;
+  const u = getCurrentUser();
+  if (!u) { slot.innerHTML = ''; return; }
+  const roleInfo = USER_ROLES[u.role] || { label: u.role, color: '#9A9A95' };
+  const initials = (((u.prenom || '')[0] || '') + ((u.nom || '')[0] || '')).toUpperCase() || '?';
+  slot.innerHTML = `
+    <div class="user-chip">
+      <div class="user-info">
+        <div class="user-name">${u.prenom || ''} ${u.nom || ''}</div>
+        <div class="user-role">${roleInfo.label}</div>
+      </div>
+      <div class="user-avatar">${initials}</div>
+    </div>`;
+}
+
 /* ─── Module Paramètres — switch tabs ────────────────────────── */
 function switchParamTab(tab) {
   document.querySelectorAll('.subtab[data-param-tab]').forEach(b =>
@@ -386,16 +407,6 @@ function renderParamMonCompte() {
                 <div style="font-size:11px;color:var(--gray-500);">Résumé quotidien : achats, flash cost, alertes</div>
               </div>
             </label>
-            <div style="height:1px;background:var(--gray-200);"></div>
-            <div>
-              <label class="field-label">Clé PHAR API personnelle</label>
-              <input type="password" id="mc-claude-key"
-                     value="${(typeof getActiveClient === 'function' ? getActiveClient()?.claude_api_key : '') || ''}"
-                     placeholder="sk-ant-api03-…" style="font-size:12px;">
-              <div style="font-size:11px;color:var(--gray-500);margin-top:4px;">
-                Utilisée pour le scan BL et le matching SKU.
-              </div>
-            </div>
             <div style="text-align:right;">
               <button class="btn btn-primary btn-sm" onclick="saveMonCompte()">Enregistrer</button>
             </div>
@@ -415,11 +426,7 @@ function saveMonCompte() {
   u.alertes        = document.getElementById('mc-alertes')?.checked || false;
   u.email_journalier = document.getElementById('mc-email-jour')?.checked || false;
   saveUsers();
-  // Sync clé PHAR API
-  const keyVal = document.getElementById('mc-claude-key')?.value?.trim();
-  if (keyVal && typeof updateClientField === 'function' && typeof getActiveClient === 'function') {
-    updateClientField(getActiveClient()?.id, 'claude_api_key', keyVal);
-  }
+  renderUserChip();
   if (typeof showToast === 'function') showToast('✓ Profil mis à jour', 'success');
 }
 
@@ -508,7 +515,7 @@ function _aeRenderOptionsTable() {
         <input type="text" value="${(o.nom_produit||'').replace(/"/g,'&quot;')}"
                placeholder="Nom chez le fournisseur"
                style="min-width:160px;font-size:12px;"
-               onchange="_aeOpts[${idx}]&&(_aeOpts[${idx}].nom_produit=this.value)||(_aeOptsAchat[${idx}].nom_produit=this.value)">
+               onchange="_aeOptsAchat[${idx}].nom_produit=this.value">
       </td>
       <td style="padding:6px 8px;">
         <input type="text" value="${(o.fournisseur||'').replace(/"/g,'&quot;')}"
@@ -1499,6 +1506,12 @@ function _injectImportModal() {
 
 /* ─── Init ───────────────────────────────────────────────────── */
 loadSettings();
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', renderUserChip);
+} else {
+  renderUserChip();
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   injectParamModals();

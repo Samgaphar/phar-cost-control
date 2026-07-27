@@ -1,0 +1,22 @@
+name = "phar-cost-proxy"
+main = "src/index.js"
+compatibility_date = "2026-07-27"
+
+[vars]
+# Domaines autorisés à appeler ce proxy, séparés par des virgules.
+# Vide = tout le monde autorisé (OK en dev, À CHANGER avant la mise en ligne réelle).
+# Exemple : "https://cost.phar.swiss,http://localhost:7842"
+ALLOWED_ORIGINS = ""
+
+# ─── Pas nécessaire pour démarrer — à activer plus tard si besoin ──────────
+# Pour donner une clé Anthropic distincte à un client précis (facturation
+# séparée), décommenter et créer le namespace : `wrangler kv:namespace create CLIENT_KEYS`
+# [[kv_namespaces]]
+# binding = "CLIENT_KEYS"
+# id = "<id renvoyé par la commande ci-dessus>"
+
+# Pour suivre la consommation (tokens) par client et par mois :
+# `wrangler kv:namespace create USAGE`
+# [[kv_namespaces]]
+# binding = "USAGE"
+# id = "<id renvoyé par la commande ci-dessus>"

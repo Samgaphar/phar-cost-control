@@ -1,0 +1,14 @@
+{
+  "name": "phar-cost-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Proxy Cloudflare Worker qui cache la cle API Anthropic pour PHAR Cost.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "secret:set-key": "wrangler secret put ANTHROPIC_API_KEY"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}
