@@ -2822,6 +2822,43 @@
         </div>
       </div>
 
+
+      <!-- Import du CA depuis le rapport de caisse -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Rapport de CA</div>
+            <div class="card-subtitle">Importer le rapport de votre systeme de caisse pour ventiler le chiffre d'affaires par categorie, comme la consommation.</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-grid form-grid-3">
+            <div>
+              <label class="field-label">Systeme de caisse</label>
+              <select id="ca-pos-systeme" onchange="caPosAide()">
+                <option value="">Detection automatique</option>
+                <option value="simphony">Oracle Simphony</option>
+                <option value="lightspeed">Lightspeed</option>
+                <option value="tcpos">TCPOS</option>
+              </select>
+              <div id="ca-pos-aide" style="font-size:11px;color:var(--gray-500);margin-top:4px;"></div>
+            </div>
+            <div>
+              <label class="field-label">Rapport de CA (.xls / .xlsx)</label>
+              <input type="file" id="ca-pos-fichier" accept=".xls,.xlsx" onchange="caPosFichier(this)">
+            </div>
+            <div>
+              <label class="field-label">&nbsp;</label>
+              <div style="font-size:11px;color:var(--gray-500);">
+                Le CA HT n'est jamais deduit d'une hypothese de TVA : si le rapport ne porte
+                pas le taux, il vous est demande.
+              </div>
+            </div>
+          </div>
+          <div id="ca-pos-resultat"></div>
+        </div>
+      </div>
+
       <!-- KPIs -->
       <div class="kpi-grid">
         <div class="kpi kpi-primary">
@@ -5997,6 +6034,7 @@ document.querySelectorAll('#module-inventaire .btn').forEach(btn => {
 </script>
 <script src="flash-cost.js"></script>
 <script src="parametres.js"></script>
+<script src="ca-pos.js"></script>
 <script src="demo-data.js"></script>
 <script src="dashboard.js"></script>
 
