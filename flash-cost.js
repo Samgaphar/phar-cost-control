@@ -112,43 +112,46 @@ function fcAutoTVA(text, categorie) {
 
 const FC_TARGET_RATIO = 30; // %
 
-/* ─── Demo fixtures ──────────────────────────────────────────── */
-const FC_DEMO_ARTICLES = [
-  { id:'fca_1', nom:'Filet de bœuf CH', famille:'Viande',          fournisseur:'Merat',      unite:'kg',     prix_cible:34.90, seuil_alerte:10 },
-  { id:'fca_2', nom:'Veau faux-filet',  famille:'Viande',          fournisseur:'Fideco',     unite:'kg',     prix_cible:43.10, seuil_alerte:8  },
-  { id:'fca_3', nom:'Saumon fumé Ecosse', famille:'Poisson',       fournisseur:'Fideco',     unite:'kg',     prix_cible:37.34, seuil_alerte:8  },
-  { id:'fca_4', nom:'Bolets frais',     famille:'Épicerie',        fournisseur:'Culture',    unite:'kg',     prix_cible:38.00, seuil_alerte:15 },
-  { id:'fca_5', nom:'Champignons mélange', famille:'Épicerie',     fournisseur:'Culture',    unite:'kg',     prix_cible:13.75, seuil_alerte:15 },
-  { id:'fca_6', nom:'Parmesan AOP 24m', famille:'Boulangerie-BOF', fournisseur:'Fideco',     unite:'kg',     prix_cible:42.00, seuil_alerte:10 },
-  { id:'fca_7', nom:'Beurre AOP',       famille:'Boulangerie-BOF', fournisseur:'Stettler',   unite:'kg',     prix_cible:14.00, seuil_alerte:12 },
-  { id:'fca_8', nom:'Champagne Beatrice Baron', famille:'Boissons',fournisseur:'MonDrink',   unite:'btl',    prix_cible:14.90, seuil_alerte:10 },
-  { id:'fca_9', nom:'Chasselas Romand Obrist',  famille:'Boissons',fournisseur:'Obrist',     unite:'btl',    prix_cible: 5.43, seuil_alerte:10 },
-  { id:'fca_10',nom:'Aperol 100cl',     famille:'Boissons',        fournisseur:'MonDrink',   unite:'btl',    prix_cible:18.04, seuil_alerte:10 }
-];
+/* ─── Semaine vierge ─────────────────────────────────────────
+   Aucune donnée n'est pré-remplie : le CA est saisi par
+   l'utilisateur, les achats proviennent des BL réellement
+   scannés, les stocks des comptages réels.
+   ──────────────────────────────────────────────────────────── */
 
-function _fcDemoSemaine() {
+/** Numéro de semaine ISO 8601 (1–53) de la date donnée. */
+function _fcISOWeek(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;              // lundi = 1 … dimanche = 7
+  t.setUTCDate(t.getUTCDate() + 4 - day);      // jeudi de la semaine courante
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
+  return { year: t.getUTCFullYear(), week };
+}
+
+function _fcFmtDateCH(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
+
+/** Semaine vierge ancrée sur la semaine ISO courante (lundi → dimanche). */
+function _fcEmptySemaine(ref) {
+  const now = ref || new Date();
+  const day = now.getDay() || 7;
+  const lundi = new Date(now); lundi.setDate(now.getDate() - day + 1);
+  const dimanche = new Date(lundi); dimanche.setDate(lundi.getDate() + 6);
+  const { year, week } = _fcISOWeek(now);
   return {
-    semaine: '2026-W23',
-    debut: '01.06.2026',
-    fin: '07.06.2026',
-    ca_ht: 28000,
-    stock_ouverture: { fca_1:8.5, fca_2:4.0, fca_3:2.1, fca_4:1.5, fca_5:3.2, fca_6:1.2, fca_7:2.0, fca_8:12, fca_9:36, fca_10:3 },
-    achats:          { fca_1:12.0,fca_2:5.0, fca_3:3.5, fca_4:2.0, fca_5:6.0, fca_6:2.0, fca_7:3.0, fca_8:24, fca_9:48, fca_10:6 },
-    // Valeur réellement payée (qté × PU du BL) — démo : identique au prix cible par défaut.
-    achats_valeur:   { fca_1:12.0*34.90, fca_2:5.0*43.10, fca_3:3.5*37.34, fca_4:2.0*38.00, fca_5:6.0*13.75, fca_6:2.0*42.00, fca_7:3.0*14.00, fca_8:24*14.90, fca_9:48*5.43, fca_10:6*18.04 },
+    semaine: `${year}-W${String(week).padStart(2, '0')}`,
+    debut: _fcFmtDateCH(lundi),
+    fin:   _fcFmtDateCH(dimanche),
+    ca_ht: 0,
+    stock_ouverture: {},
+    achats:          {},
+    achats_valeur:   {},
     stock_fermeture: {},
     bls: []
   };
 }
-
-const FC_DEMO_HISTORIQUE = [
-  { id:'fch_1', semaine:'2026-W22', debut:'25.05.2026', fin:'31.05.2026', ca_ht:26500, cout_total:7800,  ratio:29.4, detail:[] },
-  { id:'fch_2', semaine:'2026-W21', debut:'18.05.2026', fin:'24.05.2026', ca_ht:24800, cout_total:7688,  ratio:31.0, detail:[] },
-  { id:'fch_3', semaine:'2026-W20', debut:'11.05.2026', fin:'17.05.2026', ca_ht:27200, cout_total:7888,  ratio:29.0, detail:[] },
-  { id:'fch_4', semaine:'2026-W19', debut:'04.05.2026', fin:'10.05.2026', ca_ht:25600, cout_total:8140,  ratio:31.8, detail:[] },
-  { id:'fch_5', semaine:'2026-W18', debut:'27.04.2026', fin:'03.05.2026', ca_ht:29100, cout_total:8118,  ratio:27.9, detail:[] },
-  { id:'fch_6', semaine:'2026-W17', debut:'20.04.2026', fin:'26.04.2026', ca_ht:23400, cout_total:7254,  ratio:31.0, detail:[] }
-];
 
 /* ─── State ──────────────────────────────────────────────────── */
 let fcArticles    = [];
@@ -160,22 +163,23 @@ let _fcEditId     = null; // article being edited
 function fcLoad() {
   try {
     const ra = localStorage.getItem(FC_LS.articles);
-    fcArticles = ra ? JSON.parse(ra) : null;
-    if (!fcArticles || !fcArticles.length) {
-      fcArticles = JSON.parse(JSON.stringify(FC_DEMO_ARTICLES));
-    }
+    const parsedA = ra ? JSON.parse(ra) : null;
+    fcArticles = Array.isArray(parsedA) ? parsedA : [];
+
     const rs = localStorage.getItem(FC_LS.semaine);
-    fcSemaine = rs ? JSON.parse(rs) : _fcDemoSemaine();
+    fcSemaine = rs ? JSON.parse(rs) : _fcEmptySemaine();
+    if (!fcSemaine.stock_ouverture) fcSemaine.stock_ouverture = {};
     if (!fcSemaine.stock_fermeture) fcSemaine.stock_fermeture = {};
     if (!fcSemaine.achats) fcSemaine.achats = {};
     if (!fcSemaine.achats_valeur) fcSemaine.achats_valeur = {};
 
     const rh = localStorage.getItem(FC_LS.historique);
-    fcHistorique = rh ? JSON.parse(rh) : JSON.parse(JSON.stringify(FC_DEMO_HISTORIQUE));
+    const parsedH = rh ? JSON.parse(rh) : null;
+    fcHistorique = Array.isArray(parsedH) ? parsedH : [];
   } catch (e) {
-    fcArticles   = JSON.parse(JSON.stringify(FC_DEMO_ARTICLES));
-    fcSemaine    = _fcDemoSemaine();
-    fcHistorique = JSON.parse(JSON.stringify(FC_DEMO_HISTORIQUE));
+    fcArticles   = [];
+    fcSemaine    = _fcEmptySemaine();
+    fcHistorique = [];
   }
 }
 
@@ -207,6 +211,15 @@ function _fcEnseigne() {
     return c?.enseigne || c?.nom || 'Établissement';
   }
   return 'Établissement';
+}
+
+/** Enseigne du client actif, normalisée pour un nom de fichier. */
+function _fcEnseigneSlug() {
+  const s = _fcEnseigne()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return s || 'Etablissement';
 }
 
 function fcNorm(s) {

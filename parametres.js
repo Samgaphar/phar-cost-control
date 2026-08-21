@@ -18,21 +18,26 @@ let pharSettings  = null;
 let pharUsers     = [];
 let _activeUserId = 'u1';
 
-/* ─── Données démo ───────────────────────────────────────────── */
+/* ─── Valeurs par défaut ─────────────────────────────────────
+   Aucune identité d'établissement n'est pré-remplie : elle est
+   saisie dans Paramètres → Entreprise. Seules les cibles de
+   ratio portent une valeur de départ (standard hôtellerie CH),
+   modifiable et clairement affichée comme paramètre.
+   ──────────────────────────────────────────────────────────── */
 const DEFAULT_SETTINGS = {
   entreprise: {
-    nom:        'Hôtel Bellerive',
-    enseigne:   'Hôtel Bellerive · Vevey',
-    adresse:    'Quai de Bellerive 12',
-    ville:      'Vevey',
-    npa:        '1800',
+    nom:        '',
+    enseigne:   '',
+    adresse:    '',
+    ville:      '',
+    npa:        '',
     pays:       'Suisse',
-    tva_number: 'CHE-123.456.789',
-    telephone:  '+41 21 944 00 00',
-    email:      'info@hotelbellerive.ch',
+    tva_number: '',
+    telephone:  '',
+    email:      '',
     devise:     'CHF',
     langue:     'fr',
-    target_food_cost: 30,
+    target_food_cost: 30,   // cible paramétrable, pas une mesure
     target_bev_cost:  20
   },
   alertes: {
@@ -42,16 +47,12 @@ const DEFAULT_SETTINGS = {
   }
 };
 
+// Un seul compte administrateur, à compléter par l'utilisateur.
 const DEFAULT_USERS = [
-  { id:'u1', nom:'Roduit', prenom:'Marc', role:'admin',
-    email:'m.roduit@bellerive.ch', telephone:'+41 79 100 00 01',
+  { id:'u1', nom:'Administrateur', prenom:'', role:'admin',
+    email:'', telephone:'',
     alertes:true, email_journalier:false, actif:true,
     modules:['recettes','achats','inventaire','flash_cost','parametres'],
-    created_at: new Date().toISOString() },
-  { id:'u2', nom:'Dupont', prenom:'Jean', role:'chef',
-    email:'j.dupont@bellerive.ch', telephone:'',
-    alertes:false, email_journalier:false, actif:true,
-    modules:['recettes','achats','inventaire','flash_cost'],
     created_at: new Date().toISOString() }
 ];
 
@@ -108,6 +109,67 @@ function switchParamTab(tab) {
   if (tab === 'entreprise')   renderParamEntreprise();
   if (tab === 'utilisateurs') renderParamUsers();
   if (tab === 'mon-compte')   renderParamMonCompte();
+  if (tab === 'donnees')      renderParamDonnees();
+}
+
+/* ─── Tab : Données ──────────────────────────────────────────
+   L'application démarre toujours vide. Ce panneau permet de
+   charger un jeu fictif pour une démonstration, ou de tout
+   effacer pour repartir sur des données réelles.
+   ──────────────────────────────────────────────────────────── */
+function renderParamDonnees() {
+  const el = document.getElementById('param-pane-donnees');
+  if (!el) return;
+
+  const demo = (typeof pharIsDemoMode === 'function') && pharIsDemoMode();
+  const nbBL = (typeof pharBLs !== 'undefined' && Array.isArray(pharBLs)) ? pharBLs.length : 0;
+  const nbSem = (typeof fcHistorique !== 'undefined' && Array.isArray(fcHistorique)) ? fcHistorique.length : 0;
+  const nbArt = (typeof pharStores !== 'undefined')
+    ? ((pharStores.food || []).length + (pharStores.bev || []).length) : 0;
+
+  el.innerHTML = `
+    <div style="max-width:760px;">
+
+      <div style="padding:16px 20px;border:1px solid ${demo ? 'var(--warning)' : 'var(--gray-200)'};
+                  background:${demo ? 'var(--warning-light)' : 'var(--gray-50)'};
+                  border-radius:var(--radius-lg);margin-bottom:24px;">
+        <div style="font-family:'Archivo';font-weight:700;font-size:13px;
+                    color:${demo ? 'var(--warning)' : 'var(--gray-700)'};margin-bottom:6px;">
+          ${demo ? 'MODE DÉMO ACTIF' : 'Données réelles'}
+        </div>
+        <div style="font-size:13px;color:var(--gray-600);line-height:1.5;">
+          ${demo
+            ? 'Les chiffres affichés dans l\'application proviennent d\'un jeu de données fictives. Ils ne reflètent pas votre établissement.'
+            : 'Tous les chiffres affichés sont calculés à partir de vos propres documents et saisies. Aucune valeur n\'est estimée ni pré-remplie.'}
+        </div>
+        <div style="display:flex;gap:20px;margin-top:14px;font-size:12px;color:var(--gray-500);">
+          <span><strong style="color:var(--gray-900);">${nbBL}</strong> document(s) scanné(s)</span>
+          <span><strong style="color:var(--gray-900);">${nbSem}</strong> semaine(s) validée(s)</span>
+          <span><strong style="color:var(--gray-900);">${nbArt}</strong> article(s) au catalogue</span>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Jeu de démonstration</div>
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px;line-height:1.5;">
+          Charge un établissement fictif complet (mercuriales, articles leaders, six semaines
+          d'historique) pour présenter l'outil. Un bandeau « MODE DÉMO » reste affiché en
+          permanence. <strong>Vos données actuelles seront remplacées.</strong>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="pharLoadDemoData()">Charger un jeu de démo</button>
+      </div>
+
+      <div style="border:1px solid var(--danger);border-radius:var(--radius-lg);padding:20px;">
+        <div style="font-weight:700;font-size:14px;color:var(--danger);margin-bottom:4px;">Repartir de zéro</div>
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:14px;line-height:1.5;">
+          Efface définitivement les bulletins scannés, l'inventaire, les semaines Flash Cost,
+          les recettes, les fournisseurs et les paramètres. L'application redémarre vide.
+        </div>
+        <button class="btn btn-outline btn-sm" style="border-color:var(--danger);color:var(--danger);"
+                onclick="pharResetAllData()">Effacer toutes les données</button>
+      </div>
+
+    </div>`;
 }
 
 /* ─── Tab : Entreprise ───────────────────────────────────────── */

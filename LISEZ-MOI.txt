@@ -1,0 +1,46 @@
+PHAR COST CONTROL — version du 21.08.2026
+==========================================
+
+Ce dossier contient l'application complète, à jour.
+Il remplace intégralement ton dossier de travail actuel.
+
+CE QUI A CHANGÉ
+---------------
+Suppression de toutes les données fictives et recalcul du
+tableau de bord sur tes données réelles.
+
+  index.html      modifié — dashboard dynamique, mercuriale à
+                  stocks zéro, fiche technique vide, onglet
+                  Paramètres > Données
+  flash-cost.js   modifié — plus d'articles ni d'historique de
+                  démonstration, semaine vierge sur la date du jour
+  parametres.js   modifié — établissement et utilisateurs vides,
+                  panneau de gestion des données
+  clients.js      modifié — fiche client vierge
+  dashboard.js    NOUVEAU — tous les indicateurs du tableau de bord
+  demo-data.js    NOUVEAU — jeu de démonstration isolé, chargé
+                  uniquement à la demande
+
+  backend-proxy/  inchangé — proxy Cloudflare pour la clé API
+
+POUR L'UTILISER
+---------------
+Ouvre index.html dans ton navigateur. Les six fichiers .js et
+.html doivent rester dans le MÊME dossier, côte à côte.
+
+L'application démarre vide : c'est voulu. Chaque chiffre affiché
+provient désormais de tes documents scannés et de tes saisies.
+Quand une donnée manque, tu vois « — » et la raison, jamais un
+chiffre inventé.
+
+POUR UNE DÉMONSTRATION
+----------------------
+Paramètres > Données > « Charger un jeu de démo ».
+Un bandeau orange MODE DÉMO reste affiché tant que les données
+fictives sont actives. Un clic sur « Repartir sur des données
+réelles » remet tout à zéro.
+
+ATTENTION
+---------
+Tes données sont stockées dans le navigateur (localStorage), pas
+dans ces fichiers. Remplacer les fichiers ne les efface pas.

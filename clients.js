@@ -16,21 +16,24 @@
 const CLIENTS_LS        = 'phar_clients_v1';
 const ACTIVE_CLIENT_LS  = 'phar_active_client_id_v1';
 
-/* ─── Modèle client par défaut ───────────────────────────── */
+/* ─── Modèle client par défaut ───────────────────────────────
+   Fiche vierge : l'établissement est renseigné par l'utilisateur
+   dans Paramètres → Entreprise. Aucun nom fictif n'est injecté.
+   ──────────────────────────────────────────────────────────── */
 const DEFAULT_CLIENT = {
-  id:              'client_demo',
-  nom:             'Hôtel Bellerive',
-  enseigne:        'Hôtel Bellerive · Vevey',
-  adresse:         'Quai de Bellerive 12',
-  ville:           'Vevey',
-  npa:             '1800',
+  id:              'client_1',
+  nom:             'Mon établissement',
+  enseigne:        '',
+  adresse:         '',
+  ville:           '',
+  npa:             '',
   pays:            'Suisse',
-  telephone:       '+41 21 944 00 00',
-  email:           'info@hotelbellerive.ch',
-  tva_number:      'CHE-123.456.789',
+  telephone:       '',
+  email:           '',
+  tva_number:      '',
   devise:          'CHF',
   langue:          'fr',
-  plan:            'pro',        // starter | pro | hotel | enterprise
+  plan:            'starter',    // starter | pro | hotel | enterprise
   claude_api_key:  '',           // clé PHAR API par client (sessionStorage)
   quota_scans:     200,          // scans/mois selon plan
   scans_utilises:  0,
@@ -50,7 +53,7 @@ function _loadClients() {
     _pharClients = [];
   }
 
-  // Si aucun client enregistré, injecter le client démo
+  // Si aucun client enregistré, créer une fiche vierge
   if (!_pharClients.length) {
     _pharClients = [JSON.parse(JSON.stringify(DEFAULT_CLIENT))];
     _saveClients();
