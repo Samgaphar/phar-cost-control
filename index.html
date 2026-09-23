@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="clients.js?v=2026-09-23"></script><!-- ← DOIT être avant tout autre script -->
+<script src="clients.js?v=2026-09-23b"></script><!-- ← DOIT être avant tout autre script -->
 <style>
   /* ============================================================
      PHAR COST — Design System v1.0
@@ -2000,6 +2000,17 @@
 
   #statusbar-api.is-error .status-dot { background: var(--danger); animation: none; }
 
+  /* Dépôt groupé de BL : tableau de contrôle */
+  #bl-scan-results:not(:empty) { margin-top: 20px; }
+  .bl-batch-row td { vertical-align: top; }
+  .bl-batch-row .badge { white-space: nowrap; }
+  .bl-batch-sub { font-size: 10px; color: var(--gray-500); font-weight: 400; margin-top: 2px; }
+  .bl-batch-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 12px 14px; margin-bottom: 10px; font-size: 13px;
+    background: var(--phar-navy-faint); border: 1px solid var(--phar-navy-pale); border-radius: var(--radius);
+  }
+
   /* ===== ACCESSIBILITÉ ===== */
   :focus-visible { outline: 2px solid var(--phar-navy); outline-offset: 2px; }
   input:focus-visible, select:focus-visible, textarea:focus-visible {
@@ -2633,7 +2644,7 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title">Scanner un ou plusieurs documents</div>
-            <div class="card-hint">PDF, JPG, PNG — max 10 Mo/fichier · OCR par PHAR API · rapprochement auto vers articles leaders</div>
+            <div class="card-hint">Déposez tous les BL du jour d'un coup (PDF, JPG, PNG — max 10 Mo/fichier) · lecture automatique · vous ne vérifiez que les BL signalés</div>
           </div>
           <div class="card-body">
             <input type="file" id="bl-file-input" accept=".pdf,.jpg,.jpeg,.png" multiple style="display:none;" onchange="handleBLFileSelected(event)">
@@ -2641,7 +2652,7 @@
               <div class="upload-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
               </div>
-              <div class="upload-title" id="bl-upload-title">Déposer un ou plusieurs fichiers ici</div>
+              <div class="upload-title" id="bl-upload-title">Déposer les BL ici — la lecture démarre seule</div>
               <div class="upload-hint" id="bl-upload-hint">ou cliquer pour parcourir vos documents</div>
             </div>
             <!-- Bouton import PHAR Marketplace -->
@@ -4343,6 +4354,8 @@ function handleBLFileSelected(event) {
   blUploadZone.style.borderStyle = 'solid';
   blUploadZone.style.borderColor = 'var(--phar-navy)';
   blUploadZone.style.background = 'var(--phar-navy-faint)';
+  // Dépôt = lancement : pas de 2e clic
+  if (proxyReady) scanBL();
 }
 
 function blLog(msg, type = 'info') {
@@ -4496,34 +4509,48 @@ async function scanBL() {
   btn.disabled = true;
   btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/></svg> Scan en cours...';
 
-  document.getElementById('bl-scan-results').innerHTML = '';
   clearBLLog();
+  blBatchIds = [];
+  renderBLBatch();
 
   const files = blFilesSelected.slice();
-  let okCount = 0, failCount = 0, totalCentimes = 0;
+  let okCount = 0, failCount = 0, dupCount = 0, done = 0, totalCentimes = 0;
 
-  blLog(`Lancement du scan de ${files.length} document(s)`, 'step');
+  blLog(`Lecture de ${files.length} document(s)…`, 'step');
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    blLog(`— [${i + 1}/${files.length}] ${file.name} (${(file.size / 1024).toFixed(0)} Ko)`, 'step');
-    try {
-      const { parsed, usage } = await scanSingleDocument(file);
-      blLog(`  ✓ ${parsed.articles?.length || 0} article(s) · ${(parsed.fournisseur && parsed.fournisseur.nom) || 'fournisseur ?'}`, 'ok');
-      if (usage) {
-        const cost_chf = ((usage.input_tokens / 1e6) * 1 + (usage.output_tokens / 1e6) * 5) * 0.89;
-        totalCentimes += cost_chf * 100;
+  // Plusieurs documents lus en parallèle (3 à la fois) pour absorber 30–50 BL/jour
+  const PARALLELE = 3;
+  let next = 0;
+  async function worker() {
+    while (next < files.length) {
+      const file = files[next++];
+      try {
+        const { parsed, usage } = await scanSingleDocument(file);
+        if (usage) {
+          const cost_chf = ((usage.input_tokens / 1e6) * 1 + (usage.output_tokens / 1e6) * 5) * 0.89;
+          totalCentimes += cost_chf * 100;
+        }
+        const dup = _blFindDuplicate(parsed);
+        if (dup) {
+          blLog(`  = ${file.name} : déjà enregistré (${dup.fournisseur} n° ${dup.numero}) — ignoré`, 'info');
+          dupCount++;
+        } else {
+          const bl = persistScannedBL(parsed, file.name);
+          blBatchIds.push(bl.id);
+          okCount++;
+        }
+      } catch (err) {
+        blLog(`  ✗ ${file.name} : ${err.message}`, 'err');
+        failCount++;
       }
-      const bl = persistScannedBL(parsed, file.name);
-      renderScanResultCard(bl);
-      okCount++;
-    } catch (err) {
-      blLog(`  ✗ ${file.name} : ${err.message}`, 'err');
-      failCount++;
+      done++;
+      btn.textContent = `Lecture ${done}/${files.length}…`;
+      renderBLBatch();
     }
   }
+  await Promise.all(Array.from({ length: Math.min(PARALLELE, files.length) }, worker));
 
-  blLog(`Terminé · ${okCount} réussi(s)${failCount ? ', ' + failCount + ' échec(s)' : ''} · coût total ≈ ${totalCentimes.toFixed(2)} centimes CHF`, okCount ? 'ok' : 'err');
+  blLog(`Terminé · ${okCount} lu(s)${dupCount ? ', ' + dupCount + ' doublon(s) ignoré(s)' : ''}${failCount ? ', ' + failCount + ' échec(s)' : ''} · coût IA ≈ ${totalCentimes.toFixed(2)} centimes CHF`, okCount ? 'ok' : 'err');
   if (okCount) {
     blLog(`${okCount} bulletin(s) enregistré(s) dans « Bulletins & rapprochement ».`, 'info');
     renderBLRepository();
@@ -4535,7 +4562,7 @@ async function scanBL() {
   b2.disabled = true;
   setScanBtnIdle();
   document.getElementById('bl-file-info').innerHTML = 'Aucun fichier sélectionné';
-  document.getElementById('bl-upload-title').textContent = 'Déposer un ou plusieurs fichiers ici';
+  document.getElementById('bl-upload-title').textContent = 'Déposer les BL ici — la lecture démarre seule';
   document.getElementById('bl-upload-hint').textContent = 'ou cliquer pour parcourir vos documents';
   blUploadZone.style.borderStyle = '';
   blUploadZone.style.borderColor = '';
@@ -4621,6 +4648,10 @@ function posOptions(merc, selected) {
 function openBLIntegrationModalFromBL(blId) {
   const bl = pharBLs.find(b => b.id === blId);
   if (!bl) { alert('Bulletin introuvable.'); return; }
+  if (bl.integre_stock) {
+    showToast(`BL ${bl.numero || ''} déjà intégré au stock — une 2e intégration doublerait les quantités.`, 'error');
+    return;
+  }
   window._activeBLId = blId;
   // Utilise les valeurs canoniques éditées du BL (prix nets + méta modifiée)
   const data = {
@@ -4646,14 +4677,16 @@ function openBLIntegrationModal(data) {
   };
   // Construit les lignes de travail (toutes incluses par défaut)
   _blDraft = data.articles.map(a => {
-    const merc = routeBLLine(a.categorie_suggeree);
+    // Rattachement déjà confirmé pour ce fournisseur → article et mercuriale repris tels quels
+    const known = _blFindItem(_blMeta.fournisseur, a);
     return {
-      designation: a.designation || '',
+      designation: known ? known.item.article : (a.designation || ''),
       quantite: parseFloat(a.quantite) || 0,
-      unite: a.unite || 'pce',
+      unite: a.unite || '',
       prix: parseFloat(a.prix_unitaire_ht) || 0,
       categorie: a.categorie_suggeree || 'Autres',
-      merc,
+      merc: known ? known.merc : routeBLLine(a.categorie_suggeree),
+      src: { ref: a.ref || '', designation: a.designation || '' },  // ligne d'origine (mémorisation)
       include: true
     };
   });
@@ -4756,16 +4789,32 @@ function renderBLIntegrationModal() {
 }
 
 // Applique l'intégration : upsert + CUMP + journal + persistance
-function integrateBLToInventory() {
+// opts.silent : intégration en lot depuis le dépôt (pas de confirm, pas de changement d'écran)
+function integrateBLToInventory(opts = {}) {
   const lines = _blDraft.filter(l => l.include);
-  if (!lines.length) return;
-  if (lines.some(l => l.quantite <= 0)) {
-    if (!confirm('Certaines lignes ont une quantité nulle — elles seront ignorées. Continuer ?')) return;
-  }
+  if (!lines.length) return false;
 
   // Détecter si c'est un bulletin de retour
   const activeBL  = window._activeBLId ? pharBLs.find(b => b.id === window._activeBLId) : null;
   const isRetour  = activeBL?.type_document === 'bulletin_retour';
+
+  // Unités : aucune quantité sans unité, aucune addition entre unités différentes
+  const pbUnites = [];
+  lines.forEach(l => {
+    if (!String(l.unite || '').trim()) { pbUnites.push(`${l.designation} : unité manquante`); return; }
+    const item = matchInventoryItem(pharStores[l.merc], l.designation);
+    if (item && item.unite && _normUnite(item.unite) !== _normUnite(l.unite)) {
+      pbUnites.push(`${l.designation} : BL en « ${l.unite} », stock en « ${item.unite} »`);
+    }
+  });
+  if (pbUnites.length) {
+    if (!opts.silent) alert('Intégration bloquée — unités à corriger :\n• ' + pbUnites.join('\n• ')
+      + '\n\nConvertissez la quantité et le prix dans l\'unité du stock, ou décochez la ligne.');
+    return false;
+  }
+  if (!opts.silent && lines.some(l => l.quantite <= 0)) {
+    if (!confirm('Certaines lignes ont une quantité nulle — elles seront ignorées. Continuer ?')) return false;
+  }
 
   let created = 0, updated = 0;
   const ts = new Date().toISOString();
@@ -4861,6 +4910,8 @@ function integrateBLToInventory() {
         store.push(item);
         created++;
       }
+      // Rattachement confirmé : retenu pour les prochains BL de ce fournisseur
+      if (l.src) _blRememberAlias(_blMeta.fournisseur, l.src, merc, item.article);
 
       stockMovements.unshift({
         id:           'mv_' + Math.random().toString(36).slice(2, 10),
@@ -4896,6 +4947,15 @@ function integrateBLToInventory() {
     saveStores();
     renderBLRepository();
   }
+  _saveBLAliases();
+  renderBLBatch();
+
+  if (opts.silent) return true;
+  // BL du dépôt en cours : on reste sur le dépôt pour enchaîner les vérifications
+  if (activeBL && blBatchIds.includes(activeBL.id)) {
+    showToast(`✓ BL ${_blMeta.numero || '—'} intégré · ${created} créé(s) · ${updated} mis à jour`, 'success');
+    return true;
+  }
 
   // Bascule sur l'inventaire pour montrer le résultat
   const invItem = document.querySelector('.nav-sub-item[data-module="inventaire"]');
@@ -4913,6 +4973,192 @@ function integrateBLToInventory() {
       showToast(`✓ Entrée en stock · BL ${_blMeta.numero || '—'} · ${created} créé(s) · ${updated} mis à jour · CUMP recalculé`, 'success');
     }
   }
+  return true;
+}
+
+/* ============================================================
+   DÉPÔT GROUPÉ — contrôle automatique + intégration en lot
+   Principe : l'utilisateur ne regarde que les BL « à vérifier ».
+   Un BL est « OK » seulement si chaque ligne est rattachée à un
+   article connu (rattachement exact ou déjà confirmé), dans la
+   même unité que le stock, à un prix cohérent, et si le total
+   des lignes correspond au total du document.
+   ============================================================ */
+
+const BL_ALIASES_LS = 'phar_bl_aliases_v1';
+// Seuils du contrôle automatique (réglables)
+const BL_ECART_PRIX_MAX  = 0.25;  // ±25 % vs CUMP — large car les prix primeurs bougent chaque semaine
+const BL_ECART_TOTAL_MAX = 0.05;  // CHF d'écart toléré entre somme des lignes et total HT du document
+
+// Rattachements confirmés : "fournisseur|ref:xxx" ou "fournisseur|lib:xxx" → { merc, article }
+let blAliases = {};
+try { blAliases = JSON.parse(localStorage.getItem(BL_ALIASES_LS) || '{}') || {}; }
+catch (e) { console.error('PHAR · rattachements BL illisibles', e); blAliases = {}; }
+function _saveBLAliases() {
+  try { localStorage.setItem(BL_ALIASES_LS, JSON.stringify(blAliases)); }
+  catch (e) { showToast('⚠ Rattachements non sauvegardés (espace navigateur saturé).', 'error'); }
+}
+
+// IDs des BL du dernier dépôt (affichés dans le tableau de contrôle)
+let blBatchIds = [];
+
+function _blAliasKey(fournisseur, ligne) {
+  const ref = String(ligne.ref || '').trim().toLowerCase();
+  return normalizeName(fournisseur) + '|' + (ref ? 'ref:' + ref : 'lib:' + normalizeName(ligne.designation));
+}
+function _blRememberAlias(fournisseur, ligne, merc, article) {
+  blAliases[_blAliasKey(fournisseur, ligne)] = { merc, article };
+}
+
+// Unité normalisée — uniquement des synonymes stricts, jamais de conversion
+function _normUnite(u) {
+  const x = normalizeName(u).replace(/\s+/g, '');
+  const syn = {
+    kg: 'kg', kilo: 'kg', kilos: 'kg', kilogramme: 'kg', kilogrammes: 'kg',
+    pce: 'pce', pc: 'pce', pcs: 'pce', piece: 'pce', pieces: 'pce', st: 'pce', stk: 'pce', stuck: 'pce', unite: 'pce',
+    l: 'l', lt: 'l', litre: 'l', litres: 'l',
+    btl: 'btl', bt: 'btl', bouteille: 'btl', bouteilles: 'btl',
+    g: 'g', gr: 'g', gramme: 'g', grammes: 'g',
+    botte: 'botte', bottes: 'botte', bte: 'botte',
+    crt: 'carton', carton: 'carton', cartons: 'carton', colis: 'colis', cs: 'caisse', caisse: 'caisse', caisses: 'caisse'
+  };
+  return syn[x] || x;
+}
+
+// Article de stock correspondant à une ligne de BL : rattachement confirmé, sinon nom identique
+function _blFindItem(fournisseur, ligne) {
+  const alias = blAliases[_blAliasKey(fournisseur, ligne)];
+  if (alias) {
+    const item = pharStores[alias.merc]?.find(i => i.article === alias.article);
+    if (item) return { item, merc: alias.merc, via: 'alias' };
+  }
+  const nd = normalizeName(ligne.designation);
+  if (!nd) return null;
+  for (const merc of ['food', 'bev']) {
+    const item = pharStores[merc].find(i => normalizeName(i.article) === nd);
+    if (item) return { item, merc, via: 'nom' };
+  }
+  return null;
+}
+
+// Contrôle d'un BL → { etat: 'ok' | 'verifier' | 'integre', points: [...] }
+function checkBL(bl) {
+  if (bl.integre_stock) return { etat: 'integre', points: [] };
+  const points = [];
+  const arts = Array.isArray(bl.articles) ? bl.articles : [];
+  if (bl.type_document === 'bulletin_retour') points.push('Bulletin de retour : à valider manuellement');
+  if (!arts.length) points.push('Aucune ligne lue sur le document');
+  if (!bl.fournisseur) points.push('Fournisseur non lu');
+
+  const inconnus = [], unites = [], prix = [], vides = [];
+  let somme = 0;
+  arts.forEach(a => {
+    const q = parseFloat(a.quantite) || 0, p = parseFloat(a.prix_unitaire_ht) || 0;
+    const lib = a.designation || '(sans libellé)';
+    somme += (a.total_ht != null && a.total_ht !== '') ? (parseFloat(a.total_ht) || 0) : q * p;
+    if (q <= 0 || p <= 0) vides.push(lib);
+    const found = _blFindItem(bl.fournisseur, a);
+    if (!found) { inconnus.push(lib); return; }
+    const uStock = found.item.unite;
+    if (!String(a.unite || '').trim() || (uStock && _normUnite(uStock) !== _normUnite(a.unite))) {
+      unites.push(`${lib} (BL : ${a.unite || '?'} · stock : ${uStock || '?'})`);
+    }
+    const ref = found.item.cump != null ? found.item.cump : found.item.pu;
+    if (ref > 0 && p > 0 && Math.abs(p - ref) / ref > BL_ECART_PRIX_MAX) {
+      const pct = Math.round((p - ref) / ref * 100);
+      prix.push(`${lib} (${pct > 0 ? '+' : ''}${pct} %)`);
+    }
+  });
+  const liste = arr => arr.slice(0, 3).join(', ') + (arr.length > 3 ? ` +${arr.length - 3}` : '');
+  if (inconnus.length) points.push(`${inconnus.length} article(s) à rattacher : ${liste(inconnus)}`);
+  if (unites.length)   points.push(`Unité à vérifier : ${liste(unites)}`);
+  if (prix.length)     points.push(`Prix inhabituel : ${liste(prix)}`);
+  if (vides.length)    points.push(`Quantité ou prix manquant : ${liste(vides)}`);
+  const totalDoc = parseFloat(bl.total_ht) || 0;
+  if (arts.length && totalDoc > 0 && Math.abs(somme - totalDoc) > BL_ECART_TOTAL_MAX) {
+    points.push(`Total des lignes ${somme.toFixed(2)} ≠ total du BL ${totalDoc.toFixed(2)} CHF`);
+  }
+  return { etat: points.length ? 'verifier' : 'ok', points };
+}
+
+// Doublon : même fournisseur + même numéro déjà enregistré
+function _blFindDuplicate(parsed) {
+  const four = normalizeName(typeof parsed.fournisseur === 'string' ? parsed.fournisseur : parsed.fournisseur?.nom);
+  const num  = normalizeName(parsed.numero);
+  if (!four || !num) return null;
+  return pharBLs.find(b => normalizeName(b.fournisseur) === four && normalizeName(b.numero) === num) || null;
+}
+
+// Tableau de contrôle du dépôt en cours
+function renderBLBatch() {
+  const wrap = document.getElementById('bl-scan-results');
+  if (!wrap) return;
+  const bls = blBatchIds.map(id => pharBLs.find(b => b.id === id)).filter(Boolean);
+  if (!bls.length) { wrap.innerHTML = ''; return; }
+  const checks = bls.map(bl => ({ bl, c: checkBL(bl) }));
+  const nOk  = checks.filter(x => x.c.etat === 'ok').length;
+  const nVer = checks.filter(x => x.c.etat === 'verifier').length;
+  const nInt = checks.filter(x => x.c.etat === 'integre').length;
+
+  const badge = etat => etat === 'ok' ? '<span class="badge badge-success">OK</span>'
+    : etat === 'integre' ? '<span class="badge badge-info">Intégré</span>'
+    : '<span class="badge badge-warning">À vérifier</span>';
+  // Les BL à vérifier d'abord, puis OK, puis intégrés
+  const ordre = { verifier: 0, ok: 1, integre: 2 };
+  checks.sort((a, b) => ordre[a.c.etat] - ordre[b.c.etat]);
+
+  wrap.innerHTML = `
+    <div class="bl-batch-head">
+      <div><strong>${bls.length}</strong> document(s) · <strong>${nVer}</strong> à vérifier · <strong>${nOk}</strong> OK · <strong>${nInt}</strong> intégré(s)</div>
+      <button class="btn btn-primary btn-sm" onclick="integrateAllOkBLs()" ${nOk ? '' : 'disabled'}>${nOk > 1 ? `Intégrer les ${nOk} BL OK` : nOk === 1 ? 'Intégrer le BL OK' : 'Aucun BL prêt à intégrer'}</button>
+    </div>
+    <div class="inv-table-scroll">
+      <table class="data-table" style="font-size:12px;">
+        <thead><tr>
+          <th>État</th><th>Document</th><th class="num">Total HT</th><th>Points à voir</th><th></th>
+        </tr></thead>
+        <tbody>${checks.map(({ bl, c }) => `
+          <tr class="bl-batch-row">
+            <td>${badge(c.etat)}</td>
+            <td><strong>${_escH(bl.fournisseur || '—')}</strong>
+              <div class="bl-batch-sub">n° ${_escH(bl.numero || '—')} · ${_escH(bl.date || '—')} · ${_escH(bl.fichier || '')}</div></td>
+            <td class="num">${(parseFloat(bl.total_ht) || 0).toFixed(2)}<div class="bl-batch-sub">${(bl.articles || []).length} ligne(s)</div></td>
+            <td style="font-size:11px; min-width:220px;">${c.points.length ? c.points.map(p => `<div>• ${_escH(p)}</div>`).join('') : '<span style="color:var(--gray-500);">—</span>'}</td>
+            <td style="text-align:right;white-space:nowrap;">${c.etat === 'integre' ? ''
+              : `<button class="btn btn-outline btn-sm" data-id="${_escH(bl.id)}" onclick="openBLIntegrationModalFromBL(this.dataset.id)">${c.etat === 'ok' ? 'Voir' : 'Vérifier'}</button>`}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:11px;color:var(--gray-500);margin-top:8px;">
+      Réception en lot : ${_escH(POS_DEFINITIONS.food[0])} (food) · ${_escH(POS_DEFINITIONS.bev[0])} (boissons).
+      Pour un autre point de réception, ouvrez le BL avec « Voir ». Chaque rattachement validé est retenu pour les prochains BL du même fournisseur.
+    </div>`;
+}
+
+// Intègre au stock tous les BL « OK » du dépôt, sans fenêtre
+function integrateAllOkBLs() {
+  const oks = blBatchIds.map(id => pharBLs.find(b => b.id === id)).filter(bl => bl && checkBL(bl).etat === 'ok');
+  if (!oks.length) return;
+  let n = 0;
+  oks.forEach(bl => {
+    window._activeBLId = bl.id;
+    _blMeta = { fournisseur: bl.fournisseur, numero: bl.numero, date: bl.date || new Date().toLocaleDateString('fr-CH') };
+    _blPos.food = POS_DEFINITIONS.food[0];
+    _blPos.bev  = POS_DEFINITIONS.bev[0];
+    _blDraft = bl.articles.map(a => {
+      const f = _blFindItem(bl.fournisseur, a);   // garanti par checkBL (état OK)
+      return {
+        designation: f.item.article, quantite: parseFloat(a.quantite) || 0, unite: a.unite,
+        prix: parseFloat(a.prix_unitaire_ht) || 0, categorie: a.categorie_suggeree || 'Autres',
+        merc: f.merc, src: { ref: a.ref || '', designation: a.designation || '' }, include: true
+      };
+    });
+    if (integrateBLToInventory({ silent: true })) n++;
+  });
+  window._activeBLId = null;
+  renderBLBatch();
+  showToast(`✓ ${n} BL intégré(s) au stock${n < oks.length ? ` · ${oks.length - n} non intégré(s), à vérifier` : ''}`, n === oks.length ? 'success' : 'error');
 }
 
 /* ---------- Journal des mouvements de stock ---------- */
@@ -6125,11 +6371,11 @@ document.querySelectorAll('#module-inventaire .btn').forEach(btn => {
 
 
 </script>
-<script src="flash-cost.js?v=2026-09-23"></script>
-<script src="parametres.js?v=2026-09-23"></script>
-<script src="ca-pos.js?v=2026-09-23"></script>
-<script src="demo-data.js?v=2026-09-23"></script>
-<script src="dashboard.js?v=2026-09-23"></script>
+<script src="flash-cost.js?v=2026-09-23b"></script>
+<script src="parametres.js?v=2026-09-23b"></script>
+<script src="ca-pos.js?v=2026-09-23b"></script>
+<script src="demo-data.js?v=2026-09-23b"></script>
+<script src="dashboard.js?v=2026-09-23b"></script>
 
 </body>
 </html>

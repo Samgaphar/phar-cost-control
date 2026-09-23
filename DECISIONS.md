@@ -32,7 +32,9 @@ Format d'une décision tranchée : date, arbitrage, motif, conséquences, étape
 - **Ce que la contrainte suisse implique** : à ma connaissance, D1 ne propose pas de région suisse — la localisation se choisit par zone large (type « Europe de l'Ouest »), ce qui satisfait « UE » mais pas « Suisse ». **À vérifier auprès de la documentation Cloudflare avant de trancher**, car si c'est confirmé, la contrainte élimine D1 et la décision se réduit au choix d'un hébergeur Postgres suisse.
 - **Reste à trancher** : (a) confirmer que « Suisse » est exigé et non seulement souhaité ; (b) si oui, choisir l'hébergeur Postgres managé suisse (candidats à évaluer : Exoscale, Infomaniak, cloudscale.ch, Swisscom — offres et SLA à vérifier).
 - **Point d'attention** : `NUMERIC(14,6)` sur les CUMP et prix (§2.1) est natif en Postgres. En D1 (SQLite), il n'existe pas de type décimal exact — l'arithmétique devrait être portée par l'application, ce qui fragilise les invariants de calcul.
-- **Décision** : _à compléter_
+- **Réponse de Sam le 23.09.2026** : **aucun client n'exige encore un hébergement en Suisse** (point (a) : souhaité, pas exigé). Priorité exprimée : une app SaaS **simple à gérer**, « pas une usine à gaz ». Volume cible : **200 à 300 BL par semaine** et par client, fournisseurs principaux primeurs (Léguriviera, Roduit), puis viande/poisson (Fideco, Mérat).
+- **Orientation** : tout chez Cloudflare (Workers + D1 + comptes), déjà utilisé pour le site et le proxy — aucun serveur à gérer. Le point d'attention décimal ci-dessus reste à traiter (montants en centimes entiers, ou arithmétique décimale applicative) avant de figer le schéma. À réexaminer si un client exige la Suisse.
+- **Décision** : _orientation Cloudflare D1, à confirmer formellement au démarrage de E-02_
 
 ### D-03 — Structure du repo : monorepo avec `core-referentiel` partagé, ou packages publiés ?
 - **Statut** : OUVERTE — bloque E-02

@@ -274,6 +274,8 @@ function fcIntegrateBLAchats(bl) {
 (function() {
   function _hookPersist() {
     if (typeof window.persistScannedBL !== 'function') return;
+    // Un seul branchement : sinon chaque BL était compté deux fois dans les achats Flash Cost
+    if (window.persistScannedBL._fcHooked) return;
     const orig = window.persistScannedBL;
     window.persistScannedBL = function(parsed, fichier) {
       const bl = orig(parsed, fichier);
@@ -290,6 +292,7 @@ function fcIntegrateBLAchats(bl) {
       renderFC4();
       return bl;
     };
+    window.persistScannedBL._fcHooked = true;
   }
   // Try immediately, also after short delay in case index.html defines it after us
   _hookPersist();
