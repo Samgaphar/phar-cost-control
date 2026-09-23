@@ -195,12 +195,12 @@ function fcSaveAll() {
 
 /* ─── Utilities ──────────────────────────────────────────────── */
 function fcFmt(n) {
-  if (n === null || n === undefined || isNaN(n)) return '—';
+  if (n === null || n === undefined || !isFinite(n)) return '—';
   return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "'");
 }
 
 function fcFmtPct(n) {
-  if (n === null || isNaN(n)) return '—';
+  if (n === null || n === undefined || !isFinite(n)) return '—';
   return n.toFixed(1) + '%';
 }
 
@@ -933,6 +933,7 @@ function fcExportPDF() {
     </tr>`).join('');
 
   const win = window.open('', '_blank');
+  if (!win) { showToast('Fenêtre d’impression bloquée par le navigateur — autorisez les pop-ups pour ce site puis réessayez.', 'error'); return; }
   win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
   <title>Flash Cost · ${fcSemaine.semaine}</title>
   <style>
@@ -1055,13 +1056,15 @@ function fcValiderSemaine() {
 function _fcNextWeek(weekStr) {
   const m = weekStr.match(/(\d{4})-W(\d{2})/);
   if (!m) return { id: weekStr + '_next', debut: '—', fin: '—' };
-  let year = parseInt(m[1]), week = parseInt(m[2]) + 1;
-  if (week > 52) { week = 1; year++; }
-  const id = `${year}-W${String(week).padStart(2, '0')}`;
-  const jan4    = new Date(year, 0, 4);
+  // Lundi de la semaine courante + 7 jours, puis numéro ISO réel
+  // (certaines années, ex. 2026, ont une semaine 53).
+  const curYear = parseInt(m[1]), curWeek = parseInt(m[2]);
+  const jan4    = new Date(curYear, 0, 4);
   const dow     = jan4.getDay() || 7;
   const monday  = new Date(jan4);
-  monday.setDate(jan4.getDate() - (dow - 1) + (week - 1) * 7);
+  monday.setDate(jan4.getDate() - (dow - 1) + (curWeek - 1) * 7 + 7);
+  const iso = _fcISOWeek(monday);
+  const id = `${iso.year}-W${String(iso.week).padStart(2, '0')}`;
   const sunday  = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   const fmt = d => d.toLocaleDateString('fr-CH');
@@ -1819,7 +1822,7 @@ function _fcRenderAnalyticsByArticle(mvs) {
     r.valeur += m.quantite * m.prix_unitaire;
     r.prix_min = Math.min(r.prix_min, m.prix_unitaire);
     r.prix_max = Math.max(r.prix_max, m.prix_unitaire);
-    if (!r.derniere_date || m.date > r.derniere_date) {
+    if (!r.derniere_date || (_fcParseDate(m.date) || 0) > (_fcParseDate(r.derniere_date) || 0)) {
       r.derniere_date  = m.date;
       r.dernier_prix   = m.prix_unitaire;
       r.fournisseur    = m.fournisseur || r.fournisseur;
@@ -2106,6 +2109,7 @@ function fcExportAnalyticsPDF() {
   const date  = new Date().toLocaleDateString('fr-CH');
 
   const win = window.open('','_blank');
+  if (!win) { showToast('Fenêtre d’impression bloquée par le navigateur — autorisez les pop-ups pour ce site puis réessayez.', 'error'); return; }
   win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
   <title>Analyse stock · ${from} – ${to}</title>
   <style>
@@ -2249,9 +2253,13 @@ function _fcInjectAnalyticsModal() {
    Dernière : Total | | | | | | [total]
    ─────────────────────────────────────────────────────────────── */
 
+// Clés désaccentuées ; noms complets et abréviations usuelles.
+// « jui » seul est ambigu (juin / juillet) → volontairement absent.
 const MOIS_FR = {
-  'jan':1,'fév':2,'fev':2,'mar':3,'avr':4,'mai':5,'juin':6,
-  'jui':6,'jul':7,'aoû':8,'aou':8,'sep':9,'oct':10,'nov':11,'déc':12,'dec':12
+  'janvier':1,'janv':1,'jan':1,'fevrier':2,'fevr':2,'fev':2,'mars':3,'mar':3,
+  'avril':4,'avr':4,'mai':5,'juin':6,'juillet':7,'juil':7,'jul':7,
+  'aout':8,'aou':8,'septembre':9,'sept':9,'sep':9,'octobre':10,'oct':10,
+  'novembre':11,'nov':11,'decembre':12,'dec':12
 };
 
 /** "21 mai 26" ou "21 mai 26, 13:44:01" → "21.05.2026" */
@@ -2260,8 +2268,10 @@ function _pharMktDate(str) {
   const m = String(str).match(/(\d{1,2})\s+([a-záéèêëûüàâ]+)\.?\s+(\d{2,4})/i);
   if (!m) return String(str).split(',')[0].trim();
   const day   = m[1].padStart(2, '0');
-  const mKey  = m[2].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').slice(0,3);
-  const mNum  = String(MOIS_FR[mKey] || 1).padStart(2, '0');
+  const mKey  = m[2].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  // Mois non reconnu : on ne devine pas, on garde la valeur brute (à vérifier)
+  if (!MOIS_FR[mKey]) return String(str).split(',')[0].trim();
+  const mNum  = String(MOIS_FR[mKey]).padStart(2, '0');
   const year  = m[3].length === 2 ? '20' + m[3] : m[3];
   return `${day}.${mNum}.${year}`;
 }
@@ -2358,7 +2368,7 @@ function _parsePHARMarketplace(rows, fileName) {
         fournisseur_ligne:  fournLine  // Fournisseur réel via marketplace
       });
 
-      if (totalHT === 0) totalHT += montant;
+      totalHT += montant;
     }
   }
 

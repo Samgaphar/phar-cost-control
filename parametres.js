@@ -1920,8 +1920,7 @@ function _renderFournisseursList() {
     </div>`;
 }
 
-function _escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function _escA(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+// _escH / _escA : définies dans clients.js (chargé en premier)
 
 function _fourCancelMerge() {
   _fourMergeSrc = null;

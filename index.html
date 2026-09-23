@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="clients.js"></script><!-- ← DOIT être avant tout autre script -->
+<script src="clients.js?v=2026-09-23"></script><!-- ← DOIT être avant tout autre script -->
 <style>
   /* ============================================================
      PHAR COST — Design System v1.0
@@ -28,8 +28,9 @@
     --gray-100: #F4F3F3;
     --gray-200: #E8E8E8;
     --gray-300: #D4D4D2;
-    --gray-400: #9A9A95;
+    --gray-400: #767670;   /* 4.6:1 sur blanc — ancien #9A9A95 (2.8:1) illisible */
     --gray-500: #6B6B65;
+    --gray-600: #55554F;   /* utilisé par la sidebar, n'était pas défini */
     --gray-700: #3D3D38;
     --gray-900: #1A1A18;
 
@@ -37,6 +38,7 @@
     --success-light: #E5F2EA;
     --warning: #C68A1A;
     --warning-light: #FCF3DC;
+    --warning-text: #8A5A00; /* texte d'avertissement ≥5:1 ; --warning reste pour bordures/pastilles */
     --danger: #B23B2A;
     --danger-light: #F8E5E1;
 
@@ -551,7 +553,7 @@
   .kpi-success .kpi-value { color: var(--success); }
   .kpi-success .kpi-corner { background: var(--success); }
   .kpi-warning { background: var(--warning-light); border-color: var(--warning); }
-  .kpi-warning .kpi-value { color: var(--warning); }
+  .kpi-warning .kpi-value { color: var(--warning-text); }
   .kpi-warning .kpi-corner { background: var(--warning); }
   .kpi-danger { background: var(--danger-light); border-color: var(--danger); }
   .kpi-danger .kpi-value { color: var(--danger); }
@@ -690,7 +692,7 @@
     background: currentColor;
   }
   .badge-success { background: var(--success-light); color: var(--success); }
-  .badge-warning { background: var(--warning-light); color: var(--warning); }
+  .badge-warning { background: var(--warning-light); color: var(--warning-text); }
   .badge-danger { background: var(--danger-light); color: var(--danger); }
   .badge-info { background: var(--phar-navy-faint); color: var(--phar-navy); }
 
@@ -812,8 +814,8 @@
   .alert.danger .alert-icon { background: var(--danger-light); color: var(--danger); }
   .alert.danger .alert-title { color: var(--danger); }
   .alert.warning { border-left-color: var(--warning); }
-  .alert.warning .alert-icon { background: var(--warning-light); color: var(--warning); }
-  .alert.warning .alert-title { color: var(--warning); }
+  .alert.warning .alert-icon { background: var(--warning-light); color: var(--warning-text); }
+  .alert.warning .alert-title { color: var(--warning-text); }
   .alert.info { border-left-color: var(--phar-navy); }
   .alert.info .alert-icon { background: var(--phar-navy-faint); color: var(--phar-navy); }
   .alert.info .alert-title { color: var(--phar-navy); }
@@ -1109,7 +1111,7 @@
   }
   .delta-positive { color: var(--success); }
   .delta-negative { color: var(--danger); }
-  .delta-warning { color: var(--warning); }
+  .delta-warning { color: var(--warning-text); }
   .delta-neutral { color: var(--gray-400); }
 
   .inv-article-cell {
@@ -1234,7 +1236,7 @@
     padding: 8px 20px;
     background: var(--warning-light);
     border-bottom: 1px solid var(--warning);
-    font-size: 12px; color: var(--warning);
+    font-size: 12px; color: var(--warning-text);
   }
   .demo-banner strong {
     font-family: 'Archivo'; font-weight: 800; font-size: 11px;
@@ -1244,7 +1246,7 @@
   }
   .demo-banner span { flex: 1; }
   .demo-banner .btn {
-    border: 1px solid var(--warning); color: var(--warning);
+    border: 1px solid var(--warning); color: var(--warning-text);
     background: transparent; flex-shrink: 0;
   }
 
@@ -1566,12 +1568,39 @@
   .nav-direct.active .nav-gicon { background: var(--phar-navy); color: var(--white); }
   .nav-direct:hover .nav-gicon { background: var(--phar-navy-faint); color: var(--phar-navy); }
 
-  /* Mobile sidebar collapse */
+  /* Mobile : la sidebar devient un tiroir ouvert par le bouton menu du header */
+  .nav-toggle { display: none; }
   @media (max-width: 800px) {
-    .nav-group-label, .nav-garrow, .nav-sub-items,
-    .nav-sub-label, .nav-footer, .nav-direct > span:not(.nav-gicon) { display: none; }
-    .nav-group-hdr, .nav-direct { padding: 10px; justify-content: center; }
-    .nav-gicon { margin: 0; }
+    .app { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); grid-template-areas: "brand header" "main main"; }
+    aside {
+      position: fixed; top: var(--header-h); left: 0; bottom: 0; z-index: 60;
+      width: min(280px, 85vw); visibility: hidden;
+      transform: translateX(-100%);
+      transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.2s;
+      box-shadow: 4px 0 24px rgba(31, 37, 96, 0.18);
+    }
+    body.nav-open aside { transform: none; visibility: visible; }
+    .nav-toggle {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; margin-right: 8px; flex-shrink: 0;
+      background: none; border: 1px solid var(--gray-200); border-radius: var(--radius);
+      color: var(--phar-navy); cursor: pointer;
+    }
+    .nav-toggle svg { width: 20px; height: 20px; }
+    header { padding: 0 12px; }
+    .module-header { grid-template-columns: 1fr; }
+    .module-actions { flex-wrap: wrap; }
+    .status-bar { left: 0; }
+    /* Header compact : on garde le menu, l'établissement et l'avatar */
+    .breadcrumb, .header-divider, .header-right .icon-btn,
+    .user-name, .user-role { display: none; }
+    .header-right { min-width: 0; gap: 8px; }
+    #header-client-slot { min-width: 0; max-width: 55vw; overflow: hidden; }
+    html, body { overflow-x: clip; }
+    main { min-width: 0; overflow-x: auto; } /* tableaux larges : défilement dans la zone de contenu, jamais coupés */
+    .status-bar { padding: 8px 16px; }
+    .status-bar > :not(:first-child) { display: none; }
+    .dash-charts { grid-template-columns: 1fr !important; } /* grille posée en style inline par dashboard.js */
   }
 
   /* ===== PRINT ===== */
@@ -1969,6 +1998,20 @@
   .toast.error { background: var(--danger); }
   @keyframes slideToast { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
 
+  #statusbar-api.is-error .status-dot { background: var(--danger); animation: none; }
+
+  /* ===== ACCESSIBILITÉ ===== */
+  :focus-visible { outline: 2px solid var(--phar-navy); outline-offset: 2px; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: none; box-shadow: 0 0 0 3px rgba(44, 49, 131, 0.35);
+  }
+  .nav-direct:focus-visible, .nav-group-hdr:focus-visible, .nav-sub-item:focus-visible { outline-offset: -2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+    .module.active, .modal, .modal-backdrop, .toast { animation: none; }
+    .btn-primary:hover, .kpi:hover { transform: none; }
+  }
+
   /* ===== RESPONSIVE ===== */
   @media (max-width: 1100px) {
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }
@@ -2001,7 +2044,7 @@
   .recon-ecart.warn { background: var(--warning-light); border: 1px solid var(--warning); }
   .recon-ecart.bad  { background: var(--danger-light);  border: 1px solid var(--danger); }
   .recon-ecart.ok   #rec-status { color: var(--success); }
-  .recon-ecart.warn #rec-status { color: var(--warning); }
+  .recon-ecart.warn #rec-status { color: var(--warning-text); }
   .recon-ecart.bad  #rec-status { color: var(--danger); }
   .bl-check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--phar-navy); vertical-align: middle; }
   .bl-check-col { width: 34px; text-align: center; }
@@ -2043,6 +2086,9 @@
 
   <!-- ===== HEADER ===== -->
   <header>
+    <button type="button" class="nav-toggle" aria-label="Ouvrir le menu" aria-expanded="false" onclick="navToggleDrawer()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
     <div class="breadcrumb">
       <span>Module</span>
       <span class="breadcrumb-sep">/</span>
@@ -2065,7 +2111,7 @@
   </header>
 
   <!-- ===== SIDEBAR v2 ===== -->
-  <aside>
+  <aside id="app-nav" aria-label="Navigation principale">
 
     <!-- Tableau de bord — standalone -->
     <div class="nav-direct active" data-module="dashboard">
@@ -3247,7 +3293,7 @@
 
 <div class="status-bar">
   <div class="status-bar-left">
-    <span><span class="status-dot"></span>PHAR API · connecté</span>
+    <span id="statusbar-api"><span class="status-dot"></span><span class="statusbar-api-txt">PHAR API · vérification…</span></span>
     <span class="status-meta">|</span>
     <span class="status-meta">Auto-save activé</span>
   </div>
@@ -3298,11 +3344,40 @@ function navToggleGroup(groupId) {
   group.classList.toggle('open');
 }
 
+/** Mobile : ouvre/ferme le tiroir de navigation */
+function navToggleDrawer(force) {
+  const open = document.body.classList.toggle('nav-open', force);
+  const btn = document.querySelector('.nav-toggle');
+  if (btn) {
+    btn.setAttribute('aria-expanded', String(open));
+    btn.setAttribute('aria-label', open ? 'Fermer le menu' : 'Ouvrir le menu');
+  }
+}
+
 /** Ouvre un groupe sans le fermer si déjà ouvert */
 function navOpenGroup(groupId) {
   const group = document.getElementById('navg-' + groupId);
   if (group) group.classList.add('open');
 }
+
+// ── Menu utilisable au clavier (les entrées sont des <div>) ────
+document.querySelectorAll('.nav-direct, .nav-group-hdr, .nav-sub-item').forEach(item => {
+  item.setAttribute('role', 'button');
+  item.setAttribute('tabindex', '0');
+  item.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item.click(); }
+  });
+});
+// Mobile : choisir un module referme le tiroir ; clic hors du tiroir aussi
+document.querySelectorAll('.nav-direct[data-module], .nav-sub-item[data-module]').forEach(item => {
+  item.addEventListener('click', () => navToggleDrawer(false));
+});
+document.querySelector('main').addEventListener('click', () => {
+  if (document.body.classList.contains('nav-open')) navToggleDrawer(false);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.body.classList.contains('nav-open')) navToggleDrawer(false);
+});
 
 // ── Click listeners sur nav-sub-item avec data-module ──────────
 document.querySelectorAll('.nav-sub-item[data-module]').forEach(item => {
@@ -3338,6 +3413,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (catBtn) catBtn.addEventListener('click', () => {
     const items = [...pharStores.food, ...pharStores.bev];
     const win = window.open('', '_blank');
+    if (!win) { showToast('Fenêtre d’impression bloquée par le navigateur — autorisez les pop-ups pour ce site puis réessayez.', 'error'); return; }
     win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Catalogue</title>
     <style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px;}h1{color:#263B8B;}
     table{width:100%;border-collapse:collapse;}th{background:#263B8B;color:white;padding:6px 10px;text-align:left;font-size:10px;text-transform:uppercase;}
@@ -3513,6 +3589,7 @@ function exportRecipePDF() {
   const actualRatio = sellingPrice > 0 ? (perPortion / sellingPrice * 100).toFixed(1) : '—';
 
   const win = window.open('', '_blank');
+  if (!win) { showToast('Fenêtre d’impression bloquée par le navigateur — autorisez les pop-ups pour ce site puis réessayez.', 'error'); return; }
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Fiche technique · ${name}</title>
   <style>
@@ -3753,7 +3830,7 @@ function renderInventoryFilters() {
   html += `<button class="inv-filter-chip ${activeCategoryFilter === 'all' ? 'active' : ''}" onclick="setCategoryFilter('all')">Tout (${inventoryData.length})</button>`;
   categories.forEach(cat => {
     const count = inventoryData.filter(i => (currentMercuriale === 'food' ? i.categorie : i.groupe) === cat).length;
-    html += `<button class="inv-filter-chip ${activeCategoryFilter === cat ? 'active' : ''}" onclick="setCategoryFilter('${cat.replace(/'/g, "\\'")}')">${cat} <span style="opacity:0.6;">${count}</span></button>`;
+    html += `<button class="inv-filter-chip ${activeCategoryFilter === cat ? 'active' : ''}" data-cat="${_escH(cat)}" onclick="setCategoryFilter(this.dataset.cat)">${_escH(cat)} <span style="opacity:0.6;">${count}</span></button>`;
   });
   wrap.innerHTML = html;
 }
@@ -3842,11 +3919,11 @@ function renderInventoryTable() {
 
     bodyHtml += `<tr data-idx="${idx}">
       <td class="inv-article-cell">
-        ${item.article}
-        ${articleMetaParts.length ? `<div class="inv-article-meta">${articleMetaParts.join(' · ')}</div>` : ''}
+        ${_escH(item.article)}
+        ${articleMetaParts.length ? `<div class="inv-article-meta">${_escH(articleMetaParts.join(' · '))}</div>` : ''}
       </td>
-      <td><span class="inv-cat-cell">${item.unite || '—'}</span></td>
-      <td style="font-size: 11px; color: var(--gray-500);">${item.fournisseur || '—'}</td>
+      <td><span class="inv-cat-cell">${_escH(item.unite || '—')}</span></td>
+      <td style="font-size: 11px; color: var(--gray-500);">${_escH(item.fournisseur || '—')}</td>
       <td class="inv-pu-cell">${item.pu.toFixed(2)}</td>
       <td class="inv-pu-cell" style="${(item.cump != null && Math.abs(item.cump - item.pu) > 0.005) ? 'color: var(--phar-navy); font-weight: 600;' : 'color: var(--gray-500);'}" title="CUMP — valorisation pondérée des entrées">${(item.cump != null ? item.cump : item.pu).toFixed(2)}</td>`;
 
@@ -4092,6 +4169,7 @@ function exportInventoryPDF() {
   const m1Headers = showM1 ? '<th>M-1</th><th>Δ</th>' : '';
 
   const win = window.open('', '_blank');
+  if (!win) { showToast('Fenêtre d’impression bloquée par le navigateur — autorisez les pop-ups pour ce site puis réessayez.', 'error'); return; }
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Inventaire ${mercLabel} · ${dateStr}</title>
   <style>
@@ -4147,7 +4225,17 @@ let proxyReady = false;
 const apiBar = document.getElementById('api-bar');
 const apiBarStatus = document.getElementById('api-bar-status-text');
 
+/** Reflète l'état réel du proxy dans la barre d'état du bas (null = en cours) */
+function _setStatusBarApi(ok) {
+  const wrap = document.getElementById('statusbar-api');
+  if (!wrap) return;
+  wrap.classList.toggle('is-error', ok === false);
+  wrap.querySelector('.statusbar-api-txt').textContent =
+    ok === null ? 'PHAR API · vérification…' : ok ? 'PHAR API · connecté' : 'PHAR API · indisponible';
+}
+
 async function checkProxyConnection() {
+  _setStatusBarApi(null);
   const btn = document.getElementById('api-test-btn');
   btn.disabled = true;
   apiBar.classList.remove('connected', 'error');
@@ -4157,6 +4245,7 @@ async function checkProxyConnection() {
     proxyReady = false;
     apiBar.classList.add('error');
     apiBarStatus.textContent = '✗ Scan IA indisponible : proxy PHAR non configuré (voir backend-proxy/README.md)';
+    _setStatusBarApi(false);
     btn.disabled = false;
     return;
   }
@@ -4167,6 +4256,7 @@ async function checkProxyConnection() {
       proxyReady = true;
       apiBar.classList.add('connected');
       apiBarStatus.textContent = '✓ Scan IA disponible';
+      _setStatusBarApi(true);
     } else {
       proxyReady = false;
       apiBar.classList.add('error');
@@ -4177,6 +4267,7 @@ async function checkProxyConnection() {
     apiBar.classList.add('error');
     apiBarStatus.textContent = '✗ Erreur réseau : ' + err.message;
   }
+  if (!proxyReady) _setStatusBarApi(false);
   btn.disabled = false;
 }
 
@@ -4847,10 +4938,10 @@ function renderMovementsModal() {
         <span class="badge ${m.mercuriale === 'bev' ? 'badge-info' : 'badge-success'}">${m.mercuriale === 'bev' ? 'Boissons' : 'Food'}</span>
         ${m.type === 'retour' ? '<span class="badge badge-danger" style="margin-left:4px;">Retour</span>' : ''}
       </td>
-      <td><strong>${m.article}</strong><div style="font-size:10px; color:var(--gray-500);">${m.pos}</div></td>
-      <td style="font-size:11px;">${m.fournisseur || '—'}</td>
-      <td style="font-size:11px;">${m.bl_numero || '—'}</td>
-      <td class="num">${m.quantite.toString().replace('.', ',')} ${m.unite}</td>
+      <td><strong>${_escH(m.article)}</strong><div style="font-size:10px; color:var(--gray-500);">${_escH(m.pos)}</div></td>
+      <td style="font-size:11px;">${_escH(m.fournisseur || '—')}</td>
+      <td style="font-size:11px;">${_escH(m.bl_numero || '—')}</td>
+      <td class="num">${m.quantite.toString().replace('.', ',')} ${_escH(m.unite)}</td>
       <td class="num">${m.prix_unitaire.toFixed(2)}</td>
       <td class="num" style="font-size:11px;">${m.cump_avant.toFixed(2)} → <strong style="color:var(--phar-navy)">${m.cump_apres.toFixed(2)}</strong></td>
     </tr>`).join('');
@@ -5872,6 +5963,8 @@ renderBLRepository();
 (function() {
   const el = document.createElement('div');
   el.id = 'toast-container';
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
   document.body.appendChild(el);
 })();
 
@@ -5927,14 +6020,14 @@ function openRecipesModal() {
         const perPortion = totalCost / (r.portions||1);
         const fc = r.sellingPrice > 0 ? (perPortion/r.sellingPrice*100).toFixed(1)+'%' : '—';
         return `<tr>
-          <td><strong>${r.name}</strong><div style="font-size:10px;color:var(--gray-500);">${new Date(r.savedAt).toLocaleDateString('fr-CH')}</div></td>
-          <td>${r.category}</td>
-          <td class="num">${r.portions}</td>
+          <td><strong>${_escH(r.name)}</strong><div style="font-size:10px;color:var(--gray-500);">${new Date(r.savedAt).toLocaleDateString('fr-CH')}</div></td>
+          <td>${_escH(r.category)}</td>
+          <td class="num">${_escH(r.portions)}</td>
           <td class="num">${perPortion.toFixed(2)} CHF</td>
           <td class="num">${fc}</td>
           <td style="text-align:right; white-space:nowrap;">
-            <button class="btn btn-ghost btn-sm" onclick="loadRecipe('${r.id}')">Charger</button>
-            <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="deleteRecipe('${r.id}')">✕</button>
+            <button class="btn btn-ghost btn-sm" data-id="${_escH(r.id)}" onclick="loadRecipe(this.dataset.id)">Charger</button>
+            <button class="btn btn-ghost btn-sm" style="color:var(--danger);" aria-label="Supprimer la recette" data-id="${_escH(r.id)}" onclick="deleteRecipe(this.dataset.id)">✕</button>
           </td>
         </tr>`;
       }).join('')}</tbody>
@@ -6032,11 +6125,11 @@ document.querySelectorAll('#module-inventaire .btn').forEach(btn => {
 
 
 </script>
-<script src="flash-cost.js"></script>
-<script src="parametres.js"></script>
-<script src="ca-pos.js"></script>
-<script src="demo-data.js"></script>
-<script src="dashboard.js"></script>
+<script src="flash-cost.js?v=2026-09-23"></script>
+<script src="parametres.js?v=2026-09-23"></script>
+<script src="ca-pos.js?v=2026-09-23"></script>
+<script src="demo-data.js?v=2026-09-23"></script>
+<script src="dashboard.js?v=2026-09-23"></script>
 
 </body>
 </html>

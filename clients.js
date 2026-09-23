@@ -12,6 +12,16 @@
      updateClientField(id, field, v) → modifie + persiste un champ
    ============================================================ */
 
+/* ─── Échappement HTML ───────────────────────────────────────
+   Définies ici (et non dans parametres.js) car index.html les
+   appelle pendant son propre chargement (renderBLRepository).
+   ──────────────────────────────────────────────────────────── */
+function _escH(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+const _escA = _escH;
+
 /* ─── Clés localStorage ──────────────────────────────────── */
 const CLIENTS_LS        = 'phar_clients_v1';
 const ACTIVE_CLIENT_LS  = 'phar_active_client_id_v1';
